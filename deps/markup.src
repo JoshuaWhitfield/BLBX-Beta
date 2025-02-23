@@ -1,0 +1,204 @@
+b="<b>";u="<u>";b2="</b>";u2="</u>"
+color={"map":{"b":"#707070", "p":"#7A53F6", "w":"#BEB9E7FF", "r":"red"}}
+status={"is_active":false, "is_verbose":false, "streamer_mode":0, "hide_db_files":1}
+
+c=function(str)
+  if tp(color.map.indexes.indexOf(str)) == "number" then return "<color="+color.map[str]+">"
+  if tp(str.indexOf("<color=")) == "number" then return str
+  print str
+  return "<color="+str+">"
+end function
+
+a=function(str="c")
+  map={"c":"center", "r":"right", "l":"left"}
+  if tp(map.indexes.indexOf(str)) == "number" then str=map[str] else str=map["c"]
+  return "<align="+str+">"
+end function
+
+e=function(str="c")
+  map={"c":"color", "a":"align", "b":"b", "u":"u", "st":"s", "s":"size"}
+  if tp(map.indexes.indexOf(str)) == "number" then str=map[str] else str=map["c"]
+  return "</"+str+">"
+end function
+eb=e("b");eu=e("u");est=e("st");es=e("s");ea=e("a");ec=e("c")
+
+s=function(int)
+  if tp(int) != "number" then int=15
+  return "<size="+int+">"
+end function
+
+st=function();return "<s>";end function
+
+bar=function(int, color=0)
+  //if int > 45 then int=45
+  if tp(int) != "number" then return c("r")+" bar: 'int' must be an interger..."
+  return reveal(c("b"), (not color), color)+c("p")+"•"+ec+st+(" "*int)+est+c("p")+"•"
+end function
+
+display=function(input_list)
+  return bar(max(input_list)) + c10 + input_list.join(c10)
+end function
+
+//wisp=c("p")+"•"+c("w")+st+"   "+est+c("p")+"•"
+wisp=c("p")+"•"+c("w")+st+" "+est+c("p")+"•"
+reveal=function(str, onCondition=0, elseShow="");if onCondition then return str;return elseShow;end function
+box=function(str, opt=0, opt2=0);return c("b")+b+"["+reveal(u, (not opt), " ")+c("p")+str+c("b")+reveal(u2, (not opt), " ")+"]";end function
+next=c10+s(17)
+add_line=function();print c0;end function
+
+cnf=function(str, add=0)
+  return reveal(c10, (add))+b+("[".color("black")+("'"+str+"'").color("white")+"]: command not found!".color("black"))+c10
+end function
+
+mnf=function(str, add)
+  return reveal(c10, (add))+b+("[".color("black")+("'"+str+"'").color("white")+"]: macro not found!".color("black"))+c10
+end function
+
+yon=function(msg)
+  op=ui(msg)
+  print op
+  spread=[op.lower.search("y"), op.lower.search("n")]
+  print spread
+  while spread[0]+spread[1] != 1
+    op=ui(msg)
+    spread=[op.lower.search("y"), op.lower.search("n")]
+  end while
+  if spread[0] then return true
+  return false
+end function
+
+operator=function(symbol, msg);return c("r")+"[ "+c("w")+b+"'"+symbol+"'"+b2+ec+" ]: "+msg+"...";end function
+notify=function(str, type="!", add=0);return reveal(c10, (add))+box(c("w")+type+ec,1)+wisp+box(str,1);end function
+longer=function(f,s);if f.len==s.len then return [f,s];if f.len > s.len then return f else return s;end function
+shorter=function(f,s);if f.len==s.len then return [f,s];if f.len > s.len then return f else return s;end function
+
+shorten_path=function(s, add_color=0)
+  if tp(s) != "string" then return ""
+  if s[0] == "/" then s=s[1:];sl=s.split("/")
+  if sl.len <= 3 then return "/"+s
+  if not add_color then return "/"+sl[0]+"/.../"+sl[-2:].join("/")
+  return "/".color("white")+sl[0].color("black")+("/".color("white")+"...".color("black")+"/".color("white"))+(sl[-2:].join("/")).color("black black white")
+end function
+
+hide_ip=function(s)
+  if tp(s) != "string" or tp(s) == "string" and s.split("\.").len != 4 then return ""
+  sl=s.split("\.")
+  return reveal("***.***."+sl[2:].join("."), (status.streamer_mode), s)
+end function
+
+quotes=function(input_str);return """"+input_str+"""";end function
+announce=function(input, data);print b+((input+": ").color("purple"))+b2+data+c0;end function
+
+errorDisplay = function(input) 
+  if tp(input) == "list" then input = input[0]
+  if tp(input) != "string" then return c0
+  error =  b+("[ " + "?".color("white") + " ]" + wisp + "[ " + (input.color("white")) + " ]").color("black")
+  print error + c10
+  return error
+end function 
+
+parse_error=function(input_str, beginning=0, ending=1)
+  while input_str[-1] == ".";input_str=input_str[:-1];end while
+  if not tp(input_str) == "string" then return tp(input_str)
+  input_str=input_str.lower
+  if beginning and beginning[-1] != "'" then beginning=beginning+"'"
+  if input_str.search("denied") then input_str="permission denied"
+  if ending==1 then return reveal(beginning, (beginning!=0), "'")+reveal(input_str.elipsis+"' not found.", (input_str.len>15), input_str+"' not found...")
+  if tp(ending)=="string" then return reveal(beginning, (beginning!=0), "'")+reveal(input_str.elipsis+ending, (input_str.len>15), input_str+ending)
+  if not input_str.split("error: ").len < 2 then input_str=input_str.split("error: ")[1]+"..." else input_str=input_str+"..."
+  return reveal(beginning, (beginning!=0), "")+input_str
+end function
+
+printb=function(input="")
+  print b+(input)+c0
+end function
+success=function(add=1)
+  print b+("success".color("purple"))+reveal(c10, (add))+c0
+end function
+failed=function(add=1)
+  print b+("failed".color("black"))+reveal(c10, (add))+c0
+end function
+
+logo=function()
+  return b+(a+s(50)+"black".color("black")+"box".color("purple"))+c10
+end function
+
+show_prompt=function(im, il, add=1)
+  if tp(il) == "list" then il=il.join(" ")
+  if il[-1]==":" then il=il[:-1]
+
+  print im.prompt+il.color("white")+c0
+  if add then add_line
+end function
+
+shorten_dialogue=function(input_str, color=1)
+  char_count=0;word_count=0;res=""
+  clean=function(inp_str)
+    reso="";toggle=0
+    for i in inp_str
+      if i == "<" then ;toggle=1;continue;end if
+      if i == ">" then ;toggle=0;continue;end if
+      if toggle then continue
+      reso=reso+i
+    end for
+    return reso
+  end function
+
+  input_str=clean(input_str)
+  for word in input_str.split(" ")
+    if char_count > 45 then ;char_count=0;res=res+c10+b+" "; end if
+    if word.len > 9 and char_count > 39 then ;res=res+c10;char_count=0;word_count=0; end if
+    res=res+reveal(" ", (char_count>0 or not word_count), "")+b+reveal(word.color("black black purple"), (color), word)
+    char_count=char_count+(word.len+1);word_count=word_count+1
+    if word.search(c10) then ;char_count=0;word_count=0;end if
+  end for
+  return res+c10
+end function
+
+usage=function(map)
+  headers=map.indexes
+  result="";head_count=0
+  for head in headers
+    head_count=head_count+1
+    if map[head].len > 0 then
+      while map[head][0][0]==" ";map[head][0]=map[head][0][1:];end while
+    end if
+    if map[head].len > 1 and head == "usage" then
+      mini_result=""
+      for item in map[head]
+        mini_result=mini_result+b+reveal(" ", (item[0]!=" "), "")+item.color("black black purple")+c10
+      end for
+      result=result+b+(head.upper+": ").color("black")+c10
+      result=result+mini_result+c10
+      continue
+    end if
+    //if map[head].len == 1 then print head+" : "+map[head][0].len
+    if map[head].len == 1 and map[head][0].len > 45 then
+      result=result+b+(head.upper+": ").color("black")+c10
+      result=result+shorten_dialogue(map[head][0])+c10
+      continue
+    else if map[head].len == 1 and map[head][0].len <= 45 then
+      result=result+b+(head.upper+": ").color("black")+map[head][0].color("black black purple")+c10
+      continue
+    end if
+
+    result=result+reveal(c10, (head_count>1))+b+(head.upper+":").color("black")
+    result=result+c10
+    result=result+shorten_dialogue(map[head])
+
+    if head_count==1 then result=result+c10
+  end for
+  while result[-1]==c10;result=result[:-1];end while
+  print result+c10
+end function
+
+generate_prompt=function(val=["blbx"], new_line=0)
+  res="";count=-1;pointer="> ".color("purple");pointer_color=c("b")
+  for box_content in val
+    count=count+1
+    res=reveal(next, (new_line==1), "")+reveal(wisp, (count > 0), "")+box(box_content)
+  end for
+  res=res+next+wisp+box("#")+pointer+pointer_color
+  return res
+end function
+//markup.so

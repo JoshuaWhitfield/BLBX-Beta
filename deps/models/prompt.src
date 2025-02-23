@@ -1,0 +1,71 @@
+Prompt = {}
+
+Prompt.current_path = "/root"
+Prompt.ip_address = "local"
+
+Prompt.get_current_path = function()
+    return self.current_path
+end function 
+
+Prompt.get_ip_address = function()
+    return self.ip_address
+end function 
+
+Prompt.set_path = function(new_path)
+    self.current_path = new_path
+end function
+
+Prompt.set_ip_address = function(new_ip_address)
+    self.ip_address = new_ip_address
+end function 
+
+Prompt.message = function()
+    return box("blbx") + wisp + box(self.get_current_path()) + wisp + box(self.get_ip_address()) + "\n" + "-".c("black") + box("#") + ":> "
+end function
+
+Prompt.get_message = function()
+    return self.message()
+end function 
+
+Prompt.show_message = function(cmd_name, params)
+    print self.message() + b + (cmd_name + " " + params).c("purple")
+end function
+
+Prompt.run_command = function(command_ast, show_error = 1)
+
+    if not command.hasIndex(command_ast[0].value) then 
+        print
+        printb("[blbx][sys]: command not found...".c("black black purple"))
+        print 
+        return _callback.catch("", 0) 
+    end if 
+  
+    safe_run_result = Session.process.safe_run(command_ast[0].value, command_ast[0].params)
+    
+    if not safe_run_result.status and show_error then
+        print 
+        print b + safe_run_result.data.c("black black purple")
+        print 
+    end if
+
+    return safe_run_result
+end function 
+
+Prompt.prepare_input = function(input, show_error = 1)
+    count = -1
+    Parser.reset()
+
+    for cmd in input.split(":")
+        count = count + 1
+        cmd = cmd.trim
+
+        if count > 0 then print self.get_message() + (cmd).c("purple") 
+
+        command_ast = Parser.ParseCLI(cmd)
+        if not command_ast then continue
+        //print command_ast
+        runtime_result = self.run_command(command_ast, show_error)
+    end for
+    Parser.reset()
+    return true
+end function 

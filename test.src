@@ -1,0 +1,537 @@
+
+Session.allocate = function(object, lanip)
+    if tp(["shell", "computer", "file"].indexOf(tp(object)) == "number") then printb(tp(object).c("purple"))
+    if tp(object) == "shell" or tp(object) == "rshell" then 
+        self.add(object, lanip)
+        self.add(object.host_computer, lanip)
+        self.add(object.host_computer.File("/"), lanip)
+    end if 
+    if tp(object) == "computer" then 
+        self.add(object, lanip)
+        self.add(object.File("/"), lanip)
+    end if 
+    if tp(object) == "file" then 
+        while object.path != "/" 
+            object = object.parent 
+        end while 
+        self.add(object, lanip)
+    end if 
+end function
+
+Session.get_user = function(object)
+    if tp(object) == "shell" then object = object.host_computer 
+    if tp(object) == "computer" then object = object.File("/")
+
+    if not tp(Directory.find_file(object, "/root")) == "file" then file = [Directory.find_file(object, "/boot/System.map"), Directory.find_file(object, "/home")] else file = [Directory.find_file(object, "/root"), Directory.find_file(object, "/home")]
+    if not tp(file[0]) == "file" and file[0].has_permission("w") then return root
+    if tp(file[1]) == "file" then file_list = file[1].get_folders else return false 
+    users = [] 
+    result = []
+
+    for file in file_list 
+       if file.has_permission("w") then users.push(file.name)
+    end for 
+
+    if users.hasIndex(1) then return users[0]
+    if tp(users.indexOf("guest")) == "number" then return "guest"
+    return "unknown"
+end function
+
+Session.add = function(object, lanip)
+    self.object[tp(object)].list.push([object, self.get_user(object), lanip, tp(object)])
+    if tp(object) == "shell" then return self.add(object.host_computer, lanip)
+    if tp(object) == "computer" then return self.add(object.File("/"), lanip)
+end function 
+
+Session.wipe = function()
+    self.object.number = {"list": []}
+    self.object.rshell = {"list": []}
+    self.object.shell = {"list": []}
+    self.object.comp = {"list": []}
+    self.object.file = {"list": []}
+end function
+
+
+Exploit = {}
+
+Exploit.net_session = false 
+Exploit.change_password = false
+Exploit.scan_library = false 
+
+Exploit.get_net_session = function()
+    return self.net_session
+end function 
+
+Exploit.set_net_session = function(new_net_session)
+    self.net_session = new_net_session
+end function 
+
+Exploit.is_change_pass = function()
+    return self.change_password
+end function 
+
+Exploit.set_change_pass = function(new_pass_bool)
+    self.change_password = new_pass_bool
+    return self.change_password
+end function    
+
+Exploit.is_scan_mode = function()
+    return self.scan_library
+end function 
+
+Exploit.set_scan_mode = function(new_mode_bool)
+    self.scan_library = new_mode_bool
+    return self.scan_library
+end function
+
+Exploit.device = {}
+
+Exploit.device.tree = {}
+Exploit.device.current = {}
+Exploit.device.user_map = {}
+Exploit.device.serialized_tree = ""
+
+Exploit.device.get_current = function()
+    return self.current
+end function
+
+Exploit.device.set_current = function(new_current_device)
+    self.current = new_current_device
+    return self.current
+end function
+
+Exploit.device.add = function(lan_address)
+    output_object = {}
+    output_object.lan_address = lan_address
+
+    output_object.shells = Session.parse_object(Session.get_object_arr("shell"), lan_address, 0, 1)
+    output_object.computers = Session.parse_object(Session.get_object_arr("computer"), lan_address, 0, 1)
+    output_object.files = Session.parse_object(Session.get_object_arr("file"), lan_address, 0, 1)
+
+    total_users = []
+
+    for object in output_object.shells + output_object.computers + output_object.files
+        try_user = Session.get_user(object)
+        if tp(total_users.indexOf(try_user)) == "number" then continue
+        total_users.push(try_user)
+    end for 
+
+    output_object.user_arr = total_users
+    self.tree[lan_address] = output_object
+    
+    return output_object
+end function 
+
+Exploit.device.has = function(lan_address)
+    return self.tree.hasIndex(lan_address)
+end function
+
+Exploit.device.get = function(lan_address)
+    if not self.has(lan_address) then return false 
+    return self.tree[lan_address]
+end function 
+
+Exploit.device.add_user = function(lan_address, username = 0)
+    if not self.user_map.hasIndex(lan_address) then self.user_map[lan_address] = []
+    user_arr = self.user_map[lan_address]
+    if username then user_arr.push(username)
+    return true 
+end function
+
+Exploit.device.has_user = function(username, lan_address)
+    if not self.user_map.hasIndex(lan_address) then return false
+    return tp(self.user_map[lan_address].indexOf(username)) == "number"
+end function 
+
+Exploit.device.get_user = function(username, lan_address)
+    full_username = false
+    if not self.has_user(username, lan_address) then return false
+    for user in self.device.user_map[lan_address]
+        if user.lower.search(username.lower) then 
+            full_username = user 
+            break 
+        end if 
+    end for 
+    return full_username
+end function
+
+Exploit.device.get_user_arr = function(lan_address)
+    if not self.user_map.indexes.hasIndex(lan_address) then return false 
+    return self.user_map[lan_address]
+end function 
+
+Exploit.device.collect = function()
+    for lan_address in Session.machine.ip.get_lan_address_arr()
+        if not self.has(lan_address) then self.add(lan_address)
+        if not self.user_map.hasIndex(lan_address) then self.add_user(lan_address)
+        
+        for obj in Session.object.shell.list + Session.object.computer.list + Session.object.file.list
+            if lan_address != obj[2] then continue
+            username = obj[1]
+            object = obj[0]
+
+            if not self.has_user(username, lan_address) then self.add_user(lan_address, username)
+            if tp(object) == "shell" then Session.machine.ip.set_pub(object.host_computer.public_ip) 
+            if tp(object) == "computer" then Session.machine.ip.set_pub(object.public_ip)
+        end for 
+
+        self.add(lan_address, object)
+        self.add_user(lan_address)
+    end for 
+end function 
+
+Exploit.device.show_tree = function()
+    printb("public address: ".c("black") + Session.machine.ip.get_pub())
+    print
+    for lan_address in self.user_map.indexes
+        printb(" lan address: ".c("black") + lan_address.c("purple"))
+        print
+        for user in self.user_map[lan_address]
+            printb(("  " + user + ": ").c("black"))
+        end for
+        if Exploit.device.has(lan_address) and Exploit.device.get(lan_address) then shells = Exploit.device.get(lan_address).shells else shells = 0
+        if Exploit.device.has(lan_address) and Exploit.device.get(lan_address) then computers = Exploit.device.get(lan_address).computers else computers = 0
+        if Exploit.device.has(lan_address) and Exploit.device.get(lan_address) then files = Exploit.device.get(lan_address).files else files = 0
+
+        print "internal 707: "+ shells
+        print "internal 708: "+ computers
+        print "internal 709: "+ files
+        
+        printb(("  " + fif(shells, shells, "") + " " + fif(computers, computers, "") + " " + fif(files, files, "")).c("purple"))
+    end for 
+    return true
+end function 
+
+Exploit.module = {}
+Exploit.module.library = {}
+
+Exploit.module.get_payloads = function(library, check = 0, find_memory = 0)
+    database = Session.db.parse("exploit")
+    library_name = library.lib_name 
+    library_version = library.version 
+    if not database.len then return false 
+    if not database.hasIndex(library_name) then return false 
+    if database.hasIndex(library_name) and not database[library_name].hasIndex(library_version) then return false
+    if check then return true 
+    
+    owned_memory_array = database[library_name][library_version].indexes
+    mathes = []
+    payload = []
+    for memory_address in owned_memory_array
+        if not find_memory then 
+            payload = payload + database[lib_name][library_version][memory_address]
+            continue 
+        end if 
+
+        if memory_address == find_memory then 
+            payload = database[library_name][library_version][memory_address]
+            break 
+        end if 
+    end for 
+
+    return payload
+end function
+
+Exploit.module.create_exploit = function(payload_arr, memory_address, library_name, library_version)
+    return {library_version: {memory_address: payload_arr}}
+end function
+
+Exploit.module.add_exploit = function(database_entry, library)
+    add_line 
+    printb(("storing to " + library.lib_name + " v" + library.version).c("black black purple"))
+    
+    saved_database = Session.db.parse("exploit")
+    library_name = library.lib_name
+    library_version = library.version 
+    
+    for entry in database_entry 
+        
+        if not saved_database.len or (saved_database.len > 0 and not saved_database.hasIndex(library_name)) then saved_database[library_name] = {}
+        if not saved_database[library_name].len or (saved_database[library_name].len > 0 and not saved_database[library_name].hasIndex(library_version)) then saved_database[library_name][library_version] = {}
+        //print not saved_database[library_name].len or (not saved_database[library_name].hasIndex(library_version))
+    
+        printb((("adding " + str(entry.indexes.len) + " exploits to " + library_name + " v" + library_version).c("purple")).c("purple"))
+        //saved_database[library_name][library_version] = entry.value 
+
+        for memory_address in saved_database[library_name][library_version]
+            saved_database[library_name][library_version][memory_address] = (saved_database[library_name][library_version][memory_address] + entry.value[memory_address]).remove_repeats
+        end for 
+
+    end for 
+    Session.db.set(saved_database, "exploit")
+    return true 
+end function 
+
+Exploit.module.get_local_lib = function(library_name)
+    try_library_arr = Directory.find_file(get_shell.host_computer.File("/"), 0, library_name, 1)
+    
+    if not try_library_arr.len then return false 
+    result = false 
+    for library_file in try_library_arr 
+        library_file = library_file[0]
+        if library_file.name == library_name then 
+            try_library = include_lib(library_file.path)
+            if tp(["null", "number"].indexOf(tp(try_library))) == "number" then continue
+            result = try_library
+            break 
+        end if 
+    end for 
+
+    return result
+end function 
+
+
+Exploit.module.library.get_metax = function()
+    return Exploit.module.get_local_lib("metaxploit.so")
+end function 
+
+Exploit.module.library.get_crypto = function()
+    return Exploit.module.get_local_lib("crypto.so")
+end function 
+
+Exploit.module.parse_exploits = function(library, scan_library = 0)
+    exploit_map = {}
+    
+    if not scan_library then 
+        database = Session.db.parse("exploit")
+        if database then 
+            if database.hasIndex(library.lib_name) then 
+                if database[library.lib_name].hasIndex(library.version) then 
+                memory_address_arr = database[library.lib_name][library.version].indexes
+                
+                for address in memory_address_arr 
+                    unsafe_value_arr = Exploit.module.get_payloads(library, 0, address)
+                    exploit_map[address] = unsafe_value_arr
+                end for 
+
+                if exploit_map.len then return exploit_map
+                print
+                printb(("[expl][attack][notif]: library " + library.lib_name + " v" + library.version + " not found in database...").c("black black purple"))
+                print 
+                printb("commencing scan...".c("purple"))
+                print
+            end if
+        end if
+    end if 
+
+    memory_address_arr = Exploit.module.library.get_metax().scan(library)
+    for address in memory_address_arr
+        unsafe_value_arr = []
+        output = Exploit.module.library.get_metax().scan_address(library, address)
+        for line in output.split(c10)
+            if tp(line.indexOf("</b>.")) == "number" then unsafe_value_arr.push(slice(line, line.indexOf("<b>"), line.indexOf("</b>"))[3:])
+        end for 
+        exploit_map[address] = unsafe_value_arr
+    end for 
+
+    return _callback.catch(exploit_map, 1)
+end function 
+
+Exploit.module.run_exploits = function(payload_arr = [], memory_address, lan_address, library, change_password = 0)
+    if not payload_arr.len then return false 
+    third_arg = false 
+
+    if change_password then third_arg = change_password
+
+    for payload in payload_arr
+        if third_arg then object = library.overflow(memory_address, payload, third_arg) else object = library.overflow(memory_address, payload)
+        if tp(object) == "null" then continue 
+        if tp(object) == "number" then 
+            printb("password changed or firewall bypassed...".c("black"))
+            printb(("new password: "+ change_password).c("black black purple"))
+            continue 
+        end if 
+        self.add_exploit(self.create_exploit(payload_arr, memory_address, library.lib_name, library.version), library)
+        Session.allocate(object, lan_address)
+    end for 
+    
+    print notify("recon for " + ("'" + hide_ip(Session.machine.ip.get_pub_address_arr()[-1])+ "'").c("black black white") + " @ " + ("'" + hide_ip(lan_address) + "'").c("black black white") + " completed.")+c0
+    Exploit.device.collect()
+    
+    return true
+end function
+
+Exploit.module.grab_ports = function(ip_address, must_match = [], all = 0)
+    match_arr = []
+    remote_router = get_router(ip_address)
+    if tp(remote_router) == "null" then return false 
+    ports_arr = remote_router.used_ports
+    if all then return ports_arr
+
+    for port in ports_arr 
+        if tp(must_match.indexOf(str(port.port_number))) == "number" then match_arr.push(port)
+    end for 
+
+    return match_arr
+end function
+
+Exploit.module.malware = {}
+Exploit.module.malware.send = function(shell_instance, malware_prompt, malware_src_name, malware_src_content, rpc_data = {})
+    try_set_endpoint = Session.rpc.set_endpoint(shell_instance, malware_src_name, malware_src_content)
+    if not try_set_endpoint.status then return try_set_endpoint
+
+    try_send_data = Session.rpc.data.send(shell_instance, try_set_endpoint.data, malware_prompts, rpc_data, 1)
+    return try_send_data
+    //use to build trojan and rat commands. trojans are traps, rats are ran by us.
+end function 
+
+Exploit.module.malware.catch = function(callback)
+    return Session.rpc.data.catch(callback) // callback must accept param custom_obj that houses rpc return data
+end function 
+
+Exploit.scout = function()
+
+end function
+
+Exploit.attack = function(lan_address, scan_library = 0, change_password = 0)
+    memory_arr = []
+    //we will store mems and payloads by object type 
+    //this allows recon command and Exploit.scout to 
+    //avoid shell objects because it will only scan
+    library = self.get_net_session().dump_lib
+    if not Exploit.module.library.get_metax() then return _callback.catch("[expl][attack][err]: metaxploit library not found on machine...")
+    if tp(Session.machine.ip.get_lan_address_arr().indexOf(Session.machine.ip.get_lan_address())) != "number" then Session.machine.ip.add_lan_address(lan_address)
+    if tp(Exploit.module.library.get_metax().rshell_server) != "list" then rshell_arr = [] else rshell_arr = Exploit.module.library.get_metax().rshell_server 
+
+    exploit_map = Exploit.module.parse_exploits(library, scan_library)
+    
+    memory_address_arr = exploit_map.data.indexes
+
+    for address in memory_address_arr 
+        self.module.run_exploits(exploit_map.data[address], address, lan_address, library, change_password)
+    end for 
+
+    return _callback.catch("", 1)
+end function
+
+Usage = {}
+Usage.usage_object_map = {}
+Usage.display = function(cmd_name, usage_object)
+    print
+    printb(("command name: ").upper.c("black") + cmd_name.upper.c("purple"))
+    printb("long: ".upper.c("black") + usage_object.long.c("black black purple"))
+    printb("short: ".upper.c("black") + usage_object.short.c("black black purple"))
+    print
+    printb("usage: ".upper.c("black"))
+    for usage_line in usage_object.usage_arr 
+        printb(" " + usage_line.c("black black purple"))
+    end for 
+    print 
+    printb("desc: ".upper.c("black"))
+    print " " + usage_object.desc.c("black black purple")
+    print
+end function 
+
+Usage.create_usage_object = function(cmd_name, usage_arr, description, long, short)
+    self.usage_object_map[cmd_name] = {"usage_arr": usage_arr, "desc": description, "long": long, "short": short}
+    return self.usage_object_map[cmd_name]
+end function
+
+Usage.get_usage_object = function(cmd_name) 
+    return self.usage_object_map[cmd_name]
+end function 
+
+Usage.init = function()
+    //  {"cmd_name": "ls", "usage_arr": [" clear ", " cls ", " cs "], "desc": "clears terminal screen and displays next input.", "long": "clear", "short": "cls | cs"}
+    linux_cmd_arr = [{"cmd_name": "clear", "usage_arr": [" clear ", " cls ", " cs "], "desc": "clears terminal screen and displays next input.", "long": "clear", "short": "cls | cs"}, {"cmd_name": "exit", "usage_arr": [" exit "], "desc": "leaves the blbx process and exits program.", "long": "exit", "short": "-q"}, {"cmd_name": "ls", "usage_arr": [" ls [<file_path> | <file_name>]"], "desc": "displays files and directories found in a directory.", "long": "ls", "short": ""}, {"cmd_name": "cd", "usage_arr": [" cd [<file_path> | <file_name>] ", " cd ... ", " cd .. ", " cd . " , " cd "], "desc": "navigates shell instance to directory.", "long": "cd", "short": ""}, {"cmd_name": "cat", "usage_arr": [" cat [<file_name> | <file_path>] "], "desc": "displays the contents of a text file on terminal.", "long": "cat", "short": ""},  {"cmd_name": "rm", "usage_arr": [" rm [<file_name> | <file_path>] "], "desc": "removes file or directory from machine.", "long": "rm", "short": ""}]
+    custom_cmd_arr = [{"cmd_name": "find", "usage_arr": [" find [<file_name> | <file_path>] OPTION: -content "], "desc": "recursively finds a file on machine and displays its path and content by option.", "long": "find", "short": "--f"},  {"cmd_name": "apt", "usage_arr": [" apt [-upgrade | -upg] ", " apt [-update | -upd] ", " apt [-addrepo | -ar] ", " apt [-delrepo | -dr] ", " apt [-search | -sch] ", " apt [-show | -shw] ", " apt [-install | -i] "], "desc": "handles repository commands for local machine.", "long": "apt", "short": ""},  {"cmd_name": "attack", "usage_arr": [" attack <ip_address> OPTION: -port[<port_number>, ...] | -p[...] OPTION: [-scan | -s] -cgp -fw "], "desc": "attacks target ip address on all ports unless specified. also attacks router and changes password and bypasses firewalls.", "long": "attack", "short": "-atk"},  {"cmd_name": "rat", "usage_arr": [" rat [-rshell | -rsh] ", " rat [-scan_nw | -snw] ", " rat [-dict | -d] ", " rat [-esc | -e] "], "desc": "rat exploit that remotely runs scripts to reverse shell, scan the network, dictionary attack, or escalate permissions.", "long": "rat", "short": ""}]
+
+    cmd_arr = linux_cmd_arr + custom_cmd_arr
+
+    for cmd in cmd_arr 
+        self.create_usage_object(cmd.cmd_name, cmd.usage_arr, cmd.desc, cmd.long, cmd.short)
+    end for 
+
+    return true 
+end function 
+
+Wifi = {}
+Wifi.connect = function()
+    wifi_info=Directory.find_file(get_shell.host_computer.File("/"), 0, "Gift.txt")
+    co=Exploit.module.library.get_crypto();co.airmon("start", "wlan0")
+    if tp(co) == "null" then exit "*** missing 'crypto.so' library. wifi connection failed ***".color("red")
+    try=0
+    if tp(wifi_info) == "file" and wifi_info.get_content.split(c10)[0] == "Wifi access:" then
+    bssid=wifi_info.get_content.split(c10)[3]
+    essid=wifi_info.get_content.split(c10)[4]
+    passwd=wifi_info.get_content.split(c10)[5].split(": ")[1]
+    try=get_shell.host_computer.connect_wifi("wlan0", bssid, essid, passwd)
+    print notify("gift.txt found. attempting connection")+c0
+    if try == 1 then ;print notify("connected to '"+essid+"'.", "!")+c0;return true;end if
+    if tp(try) == "string" then ;print notify(try.lower.color("black black white"), "?")+c0;end if
+    if tp(try) == "null" then ;print notify(("failed to connect to '"+essid+"'").color("black black white"), "?")+c0;end if
+    end if
+    if not try then ;print notify("'Gift.txt' not found, proceeding...", "!")+c0;wait(2);end if
+
+    bl=[];el=[];pl=[]
+    for i in get_shell.host_computer.wifi_networks("wlan0")
+    i=i.split(" ")
+    bl.push(i[0]);el.push(i[2]);pl.push(i[1][:-1].to_int)
+    end for
+
+    sorted=[];for i in pl;sorted.push(i);end for;sorted.sort
+    ind=pl.indexOf(sorted[-1])
+    bssid=bl[ind];essid=el[ind];pwr=(300000/pl.sort[-1])
+    file_capture=objects.nf(get_shell.host_computer.File("/"), 0, "file.cap")
+
+    if tp(file_capture) != "file" or tp(file_capture) == "file" and tp(co.aircrack(file_capture.path)) == "null" then
+
+    add_line
+    print notify(" hacking '"+essid+"'. target ack count is "+str(round(pwr))+". ", "!")+c0
+    add_line
+
+    try2=co.aireplay(bssid, essid, pwr)
+    if tp(try2) == "string" then ;print notify(" "+try+" ", "?")+c0;return false;end if
+    end if
+
+    passwd=co.aircrack(objects.nf(get_shell.host_computer.File("/"), 0, "file.cap").path)
+    try=get_shell.host_computer.connect_wifi("wlan0", bssid, essid, passwd)
+    if tp(try) == "string" then ;print notify((" "+try.lower+" ").color("black black white"), "?")+c0;end if
+    if tp(try) == "null" then ;print notify((" failed to connect to '"+essid+"' ").color("black black white"), "?")+c0;end if
+    if try == 1 then print notify(" connected to '"+essid+"'. ", "!")+c0
+    wait(3);cs
+    return true
+end function 
+
+Params = {}
+Params.extract_type = function(PARAMS, token_type_arr)
+    instances = []
+    for param_token in PARAMS
+        for token_type in token_type_arr
+            if tp(TokenTypes.values.indexOf(param_token.type)) == "number" then 
+                instances.push(param_token)
+                continue 
+            end if
+        end for 
+    end for 
+
+    return instances
+end function
+
+Params.extract_flags = function(PARAMS) 
+    result_flags = []
+    
+    for token in PARAMS 
+        if token.type != TokenTypes.Flag then continue 
+        result_flags.push(token)
+    end for
+
+    return result_flags
+end function 
+
+Params.extract_flag_content = function(flag)
+    return flag.split("\[|\]|\,|\s").clean([""])
+end function 
+
+Dia = {}
+Dia.bridge = {}
+Dia.bridge.network = {}
+
+Dia.bridge.endpoint = {}
+
+Dia.bridge.endpoint.add_bot = function(shell_instance)
+    comp_instance = shell_instance.host_computer
+    
+end function
+
+//Internal

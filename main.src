@@ -1,0 +1,25 @@
+import_code("/root/blackbox/generic");
+import_code("/root/blackbox/callback");
+import_code("/root/blackbox/json")
+import_code("/root/blackbox/dict")
+import_code("/root/blackbox/markup");
+import_code("/root/blackbox/prompt");
+import_code("/root/blackbox/internal");
+import_code("/root/blackbox/lexer");
+import_code("/root/blackbox/parser");
+import_code("/root/blackbox/linux");
+if not get_shell.host_computer.is_network_active then Wifi.connect()
+
+Usage.init()
+Session.db.init(["exploit", "macro", "dictionary", "botnet"])
+
+database_name_arr = ["exploit", "macro", "dictionary"]
+
+for database_name in database_name_arr
+    if not Session.db.has(database_name) then Session.db.create(database_name)
+end for 
+
+while Session.process.is_running()
+    if not params.len then input = user_input(Prompt.get_message()) else input = params.join(" ") 
+    command_result = Prompt.prepare_input(input)
+end while

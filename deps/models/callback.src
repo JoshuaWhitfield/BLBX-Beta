@@ -1,0 +1,6 @@
+_callback = {}
+_callback.catch = function(message = "", status = 0)
+    if tp(message) == "string" then message = message
+    return { "status": status, "data": message }
+end function
+//callback.so

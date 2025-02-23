@@ -1,0 +1,77 @@
+Parser = {}
+Parser.tokens = []
+Parser.ast_output = []
+Parser.current = 0
+
+Parser.wipe = function()
+    self.tokens = []
+    self.current = 0
+    self.ast_output = []
+end function
+
+
+Parser.set_tokens = function(new_tokens)
+    self.tokens = new_tokens
+    return self.tokens
+end function
+
+
+Parser.get_tokens = function()
+    return self.tokens
+end function 
+
+Parser.set_current = function(new_current)
+    self.current = new_current
+    return self.current 
+end function
+
+Parser.get_current = function()
+    return self.current
+end function 
+
+Parser.get_ast_output = function()
+    return self.ast_output
+end function 
+
+Parser.set_ast_output = function(new_ast_output)
+    self.ast_output = new_ast_output
+    return self.ast_output
+end function
+
+
+Parser.consume = function()
+    if not self.get_tokens().len then return null 
+    element = self.get_tokens()[0]
+    self.set_tokens(self.get_tokens()[1:])
+    return element
+end function
+
+Parser.ParseCommand = function()
+    args = []
+    token = self.consume()
+
+    if tp(token) == "null" then return null
+
+    if token.type == TokenTypes.Command then 
+        command_token = { "type": TokenTypes.Command, "value": token.value }
+        command_token.params = self.tokens
+        self.get_ast_output().push(command_token)
+        return command_token
+    end if 
+
+end function 
+
+Parser.ParseCLI = function(input)
+    Lexer.set_input(input)
+    tokens = Lexer.Tokenize()
+    print tokens
+    Parser.set_tokens(tokens)
+    Parser.ParseCommand()
+
+    return Parser.get_ast_output()
+end function 
+
+Parser.reset = function()
+ Lexer.wipe()
+ self.wipe()
+end function

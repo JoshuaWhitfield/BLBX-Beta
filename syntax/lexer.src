@@ -1,0 +1,134 @@
+c0 = char(0)
+c33 = char(33)
+tp = @typeof
+cs = @clear_screen
+c10=function(int=1)
+  if not tp(int) == "number" or (tp(int) == "number" and int==1) then return char(10)
+  return (char(10)*int)
+end function
+
+TokenTypes = {"Command": "COMMAND", "Float": "FLOAT", "Macro": "MACRO", "Assign": "ASSIGN", "Flag": "FLAG", "Number": "NUMBER", "ParenOpen": "PARENOPEN", "ParenClosed": "PARENCLOSED", "BracketOpen": "BRACKETOPEN", "BracketClosed": "BRACKETCLOSED", "Comma": "COMMA", "String": "STRING", "Pipe": "PIPE", "Dot": "DOT", "Argument": "ARGUMENT"}
+
+Lexer = {}
+Lexer.input = ""
+Lexer.position = 0
+Lexer.first_token = true
+Lexer.token_output = []
+
+Lexer.wipe = function()
+    self.input = ""
+    self.position = 0
+    self.first_token = true
+    self.token_output = []
+end function
+
+
+Lexer.get_input = function()
+    return self.input
+end function 
+
+Lexer.set_input = function(new_input)
+    self.input = new_input
+    return self.input
+end function
+
+Lexer.consume = function()
+    if Lexer.get_input() == "" then return null
+    element = Lexer.get_input()[0]
+    Lexer.set_input(Lexer.get_input()[1:])
+    return element
+end function
+
+Lexer.next_token = function()
+    ch = self.consume()
+    if tp(ch) == "null" then return null
+
+    if ch.is_match("\s") then return self.next_token() // skip whitespace
+
+    if ch.is_match(""""+"|'") then 
+        quote = ch
+        value = ""
+        
+         // move past the first character
+        while self.position < self.input.len 
+            next_char = self.consume()
+            
+            if next_char == quote then break 
+            value = value + next_char
+        end while 
+
+        return { "type": TokenTypes.String, "value": value }
+    end if 
+
+
+    //Handle flags 
+
+    if ch.is_match("\-+") then 
+        flag = ch
+        temp_flag = ch
+        flag_content = []
+        fill_toggle = false
+        
+        while self.get_input().len > 0 and (ch.is_match("\-+") or ch.is_match("[a-zA-Z0-9_]+") or ch.is_match("\[\d+(,\s?\d+)*\]"))
+            temp_flag = temp_flag + self.consume()
+        end while 
+
+        return { "type": TokenTypes.Flag, "value": temp_flag }
+    end if 
+    if ch == "-" then return { "type": TokenTypes.Flag, "value": ch }
+    
+    //Handle numbers
+    if ch.is_match("\d") then 
+        number = ch
+        //if ch == " " and number.len > 1 then return { "type": TokenTypes.Float, "value": number }
+        
+        while self.get_input().len > 0 and ch.is_match("\d|\.")
+            next_number = self.consume()
+            if tp(("abcdefghigklmnopqrstuv" + "abcdefghigklmnopqrstuv ".upper).values.indexOf(next_number)) == "number" then break
+            number = number + next_number
+        end while
+        
+        return { "type": TokenTypes.Float, "value": number }
+    end if
+
+    //Handle commands
+    if ch.is_match("[a-zA-z_]") then 
+
+        keyword = ch
+        
+        while self.get_input().len > 0 and self.get_input()[self.position].is_match("[a-zA-Z0-9_]")
+			keyword = keyword + self.consume()
+        end while 
+
+        if self.first_token then 
+            self.first_token = false 
+            //print { "type": TokenTypes.Command, "value": keyword }
+            return { "type": TokenTypes.Command, "value": keyword }
+        end if 
+        //print{ "type": TokenTypes.Argument, "value": keyword }
+        return { "type": TokenTypes.Argument, "value": keyword }
+    end if
+
+    //Handle punctuation (including comma for argument separation)
+    if tp("(){}=,|".values.indexOf(ch)) == "number" then self.consume()
+    if ch == "(" then return { "type": TokenTypes.ParenOpen, "value": ch }
+    if ch == ")" then return { "type": TokenTypes.ParenClosed, "value": ch }
+    if ch == "{" then return { "type": TokenTypes.BracketOpen, "value": ch }
+    if ch == "}" then return { "type": TokenTypes.BracketClosed, "value": ch }
+    if ch == "=" then return { "type": TokenTypes.Assign, "value": ch }
+    if ch == "," then return { "type": TokenTypes.Comma, "value": ch }
+    if ch == "|" then return { "type": TokenTypes.Pipe, "value": ch }
+    //if ch.is_match("\.") then return { "type": TokenTypes.Dot, "value": ch }
+
+    return true; //unexpected token
+end function
+
+Lexer.Tokenize = function() 
+    self.token_output.push(self.next_token())
+    if tp(self.token_output[-1]) == "null" then 
+        self.token_output = self.token_output[:-1]
+        return self.token_output.clean([true])
+    end if 
+    if self.token_output[-1] == true then self.token_output = self.token_output[:-1]
+	return self.Tokenize()
+end function

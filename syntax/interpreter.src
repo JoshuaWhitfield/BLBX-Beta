@@ -1,0 +1,24 @@
+Interpreter = {}
+
+Interpreter.ast_arr = []
+Interpreter.position = 0
+
+Interpreter.get_ast_arr = function()
+    return self.ast_arr
+end function 
+
+Interpreter.set_ast_arr = function(new_ast_arr)
+    self.ast_arr = new_ast_arr
+    return self.get_ast_arr()
+end function
+
+Interpreter.consume = function()
+    if not self.get_ast_arr().len then return null 
+    element = self.get_ast_arr()[0]
+    self.ast_arr = self.get_ast_arr()[1:]
+    return element 
+end function 
+
+interpreter.Execute = function()
+    
+end function

@@ -1,0 +1,682 @@
+c33=char(33);c0=char(0);
+c10=char(10);tp=@typeof;
+
+cs=@clear_screen;
+ui=@user_input;
+
+gs = function()
+    return get_shell;
+end function
+
+gc = function()
+    return get_shell().host_computer;
+end function
+
+gf=function(path = "/")
+    return get_computer().File(path);
+end function
+
+callable = function(value)
+    return tp(value) == "function";
+end function
+
+anonSuccess = function()
+  return true
+end function
+
+anonFailure = function()
+  return true
+end function
+
+fif = function(condition, onSuccess = @anonSuccess, onFailure = @anonFailure)
+    if callable(condition) then condition = condition();
+    
+    if condition then 
+        if callable(onSuccess) then return onSuccess();
+        return onSuccess;
+    end if
+
+    if callable(onFailure) then return onFailure();
+    return onFailure();
+end function
+
+// Strings
+string.search = function(sub_string = "")
+    return tp(self.lower.indexOf(sub_string.lower)) == "number";
+end function
+
+string.has = function(sub_string = "")
+    return tp(self.indexOf(sub_string)) == "number";
+end function
+
+string.quote = function()
+    return """" + self + """";
+end function
+
+string.elipsis = function(size = 15)
+    if self.len > size then return self[:(size-1)] + "...";
+    return self;
+end function
+
+string.color=function(string_split_by_space="black black black");list=string_split_by_space.split(" ")
+  if not string_split_by_space.len then string_split_by_space="black black black"
+  colorm={"black":"<#707070>", "white":"<#BEB9E7FF>", "purple":"<#7A53F6>", "pink":"<#ED2EEA>", "red":"<color=red>", "dark_red":"<#731313>", "blue":"<color=blue>", "green":"<#2BB930>", "dark_green":"<#2C6407>", "cyan":"<#32E3EF>", "yellow":"<#D2DE0F>", "brown":"<#674D06>", "orange":"<#EA9512>"}
+  alpha="qwertyuiopasdfghjklzxcvbnm";number="1234567890";symbol="!@#$%^&*()_+-={}|[]\:;'<>?,./"+""""
+  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function
+  if not check_all() then return false
+  while list.len < 3;list.push(list[-1]);end while
+  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="alpha";newl=[];fp=1//;count=-1
+  for char in self.values
+    is_a=(tp(alpha.indexOf(char.lower)) == "number");is_n=(tp(number.indexOf(char)) == "number");is_s=(tp(symbol.indexOf(char)) == "number")
+    if char==c10 then ;newl.push(char+curr_color);continue;end if
+    if is_a then curr_type="alpha";if is_n then curr_type="number";if is_s then curr_type="symbol"
+    if curr_type=="alpha" then
+      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=coa;continue
+    end if
+    if curr_type=="number" then
+      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=con;continue
+    end if
+    if curr_type=="symbol" then
+      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=cos;continue
+    end if
+    newl.push(char)
+  end for
+  self=newl.join("");ctr=0
+  for i in self
+    if i == "<" then ctr=ctr+1
+  end for
+  for i in range(1,ctr)
+    self=self+"</color>"
+  end for
+  return self
+end function
+string.c = @string.color
+
+string.reverse = function()
+    return self.values.reverse.join("");
+end function
+
+string.isEmpty = function()
+    return self.len == 0
+end function
+
+string.to_bin=function(return_as_arr=0)
+  ord=function(char);return char.code;end function
+  int_to_bin=function(x)
+    if not x then return [0]
+    bit=[]
+    while x
+      bit.push(round(x%2))
+      x=bitwise(">>", x, 1)
+    end while
+    while bit.len < 8;bit.push(0);end while
+    bit=bit.reverse
+    return bit
+  end function
+  str_to_arr=function(string);newl=[];for i in string;newl.push(i.to_int);end for;return newl;end function
+  arr_to_str=function(arr);newl=[];for i in arr;newl.push(str(i));end for;return newl.join("");end function
+  newl=[]
+  for char in self
+    newl=newl+int_to_bin(ord(char))
+  end for
+  self=newl
+  if return_as_arr then return newl else return arr_to_str(newl)
+end function
+
+string.remove_markup=function()
+  new_self="";count=0;toggle=0
+  for i in self
+    if i == "<" then ;toggle=1;continue; end if
+    if i == ">" then ;toggle=0;continue; end if
+    if toggle then continue
+    new_self=new_self+i
+  end for
+
+  return new_self
+end function
+
+string.enc=function()
+  //flip each bit by it's hex number and put the number/10 before the resulting bit. add and continue.
+  res=[];sep=",.'qwripdfhkxcvm".values
+  //print self
+  for i in self
+    bin=i.to_bin;ind=-1
+    //print bin
+    tc=0;fc=0;tcl=[];fcl=[]
+    for ide in bin.values;ind=ind+1
+      if ide=="1" then
+        tc=tc+1
+        tcl.push(ind)
+      else
+        fc=fc+1
+        fcl.push(ind)
+      end if
+    end for
+    ucl=[];uc=0
+    //if there are more 0's than 1's, it ascends: 1,2,3
+    //if there are more 1's than 0's or are even, it descends: 3,2,1
+    if tc < fc then ;tcl.sort;ucl=tcl; end if
+    if tc > fc then ;fcl.sort;ucl=fcl.reverse; end if
+    if tc == fc then ;fcl.sort;ucl=fcl.reverse; end if
+    sep.shuffle;rnd_ind=(floor((rnd*15) + 0))
+    res.push(ucl.join("")+sep[rnd_ind])
+    continue
+  end for
+  //print res.join("")
+  return res.join("")
+end function
+
+string.dec = function()
+  separators = ( ["\,", "\."] + "'qwripdfhkxcvm".values )
+  regular_str = 0
+  decrypted_binary_arr = []
+
+  for word in self.split(separators.join("|"))[:-1]
+    index_arr = word.values
+    qwerty = "qwertyuiopasdfghjklzxcvbnm"
+    qwerty = ( qwerty + qwerty.upper )
+    is_ascending = 0
+
+    if not index_arr.len or word.has(qwerty.values.join("|")) > 0 then 
+      regular_str = 1
+      break
+    end if
+
+    if index_arr.len == 1 then is_ascending = 1
+    if not is_ascending and (index_arr[0].to_int - index_arr[-1].to_int) < 0 then is_ascending = 1
+
+    if is_ascending then
+      new_bin = "00000000".values
+      for index in index_arr 
+        index = index.to_int
+        new_bin[index] = "1"
+      end for
+    else
+      new_bin = "11111111".values
+      for val in index_arr 
+        val = val.to_int
+        new_bin[val] = "0"
+      end for
+    end if
+    decrypted_binary_arr.push(new_bin.join(""))
+  end for
+  
+  if regular_str then return self
+
+  paired_decimal_arr = []; hexadecimal_arr = []; decrypted_ascii_arr = []; res_list = []
+
+  for binary in decrypted_binary_arr
+    binary = binary.reverse; first_nibble = binary[0:4]; second_nibble = binary[4:]; total = []
+    
+    //-- change binary to decimal representation
+    for nibble_arr in [first_nibble.values, second_nibble.values]
+      position = 0; catch = []
+      for bit in nibble_arr
+        bit = bit.to_int
+        if not bit then 
+          position = position + 1
+          continue
+        end if
+        expontial_operation = (2 ^ position)
+        catch.push(bit * expontial_operation)
+        position = position + 1
+      end for
+      
+      val = 0
+      for i in catch 
+        val = val + i
+      end for
+      total.push(val)
+    end for
+    paired_decimal_arr.push(total.reverse)
+  end for
+
+  //-- change decimal to hexadecimal
+  for paired_decimal in  paired_decimal_arr
+    paired_decimal = paired_decimal.reverse; position = 0; total = []
+
+    for decimal in paired_decimal
+      expontial_operation = (16 ^ position)
+      total.push(decimal * expontial_operation)
+      position = position + 1
+    end for
+
+    val = 0
+    for product in total 
+      val = val + product
+    end for
+
+    hexadecimal_arr.push(val)
+  end for
+
+  for hexadecimal in hexadecimal_arr
+    decrypted_ascii_arr.push(char(hexadecimal))
+  end for
+
+  return decrypted_ascii_arr.join("")
+end function
+//list:
+list.groupBy=function(size=10)
+  if self.len <=  size then return [self]
+  psuedo_self=new self;psuedo_self=psuedo_self["__isa"];newl=[]
+  while psuedo_self.len > 0
+    if psuedo_self.len > size then
+      newl.push(psuedo_self[:size]);psuedo_self=psuedo_self[size:] ;continue
+    end if
+    newl.push(psuedo_self);break
+  end while
+  return newl
+end function
+
+list.remove_repeats=function()
+  newl=[]
+  for i in self
+    if tp(newl.indexOf(i)) != "number" then newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+
+
+//list:
+//t_list=range(0,49)
+
+list.reverse=function()
+  psuedo_self=new self;psuedo_self=psuedo_self["__isa"];newl=[]
+  while psuedo_self.len > 0
+    newl.push(psuedo_self.pop)
+  end while
+  self= newl
+  return self
+end function
+//t_list=t_list.reverse
+
+list.deep_copy=function()
+  newl=[]
+  for item in self
+    if tp(item) == "list" then
+      newl.push(item.deep_copy)
+      continue
+    end if
+    newl.push(item)
+  end for
+
+  return newl
+end function
+
+list.rnd_ind=function()
+  if not self.len then return 0
+  return self[floor((rnd*self.len-1) + 0)]
+end function
+
+list.combine=function();newm={}
+  for i in self
+    if not i.len == 2 then continue
+    newm[i[0]]=newm[i[1]]
+  end for
+  self=newm
+  return self
+end function
+list.copy=function();res=[];for i in self;res.push(i);end for;self=res;return self;end function
+list.clean=function(example_list)
+  newl=[]
+  for i in self
+    if tp(example_list.indexOf(i)) == "number" then continue
+    newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+
+list.has=function(val=[])
+  if tp(val) != "list" then val=[val]
+  if not val.len then return true
+  found=0
+  for i in val
+    if tp(self.indexOf(i)) == "number" then found=1
+  end for
+  return found
+end function
+
+list.format_columns=function()
+  //make a super clean version here
+  clean_list=function(il) ;l=[];for i in il;if tp(i) != "string" then continue;l.push(i);end for;return l;end function
+  input_list=clean_list(self)
+
+  s=" "
+  grid={}
+  grid.columns={}
+  grid.rows=[]
+  //print input_list
+  grid.top=input_list[0].remove_markup
+  for i in range(0, grid.top.split(s).len-1) ;if not grid.columns.hasIndex(str(i)) then ;grid.columns[str(i)]={};grid.columns[str(i)].largest=0;end if; end for
+  for row in input_list
+    total=[];count=-1
+    for i in row.split(" ")
+      count=count+1
+      if not grid.columns.hasIndex(str(count)) then continue
+      data=i.remove_markup
+      if grid.columns[str(count)].largest < data.len then grid.columns[str(count)].largest=data.len
+      total.push(i)
+    end for
+    grid.rows.push(total)
+  end for
+
+  result="";count=-1
+  for row in grid.rows
+    sub_count=-1;line="";count=count+1
+    for item in row
+      sub_count=sub_count+1
+      clean_item=item.remove_markup
+      diff=abs(clean_item.len - grid.columns[str(sub_count)].largest)
+      line=line+s+item+reveal((s*diff)+(s), (sub_count!=grid.columns.len-1))
+    end for
+    result=result+reveal(c10, (count!=0))+line
+  end for
+  print bar(45)+c0
+  print result
+end function
+
+list.max=function()
+  res=0
+  for i in self
+    len=0
+    if tp(i) == "string" or tp(i) == "map" or tp(i) == "list" then len=i.len
+    if tp(i) == "number" then len=i
+    if len > res then res=len
+  end for
+  return res
+end function
+
+list.min=function()
+  res=0
+  for i in self
+    len=0
+    if tp(i) == "string" or tp(i) == "map" or tp(i) == "list" then len=i.len
+    if tp(i) == "number" then len=i
+    if len < res then res=len
+  end for
+  return res
+end function
+
+list.slice=function(start_ind, to_ind)
+  psuedo_self=new self;psuedo_self=psuedo_self["__isa"]
+  if tp(start_ind) != "number" or tp(to_ind) != "number" or (tp(start_ind) == "number" and not psuedo_self.hasIndex(start_ind)) then return null
+  if to_ind < 0 then;extra=range(0,psuedo_self.len-1);ind=extra[to_ind];to_ind=ind;end if;difference=(to_ind-(psuedo_self.len-1))
+  if not psuedo_self.hasIndex(to_ind) and difference==1 then psuedo_self=psuedo_self+["_"]
+  if not psuedo_self.hasIndex(to_ind) and difference>1 then return null
+  return slice(psuedo_self, start_ind, to_ind)
+end function
+//map:
+//t_map={}
+map.add=function(key, value)
+  self[key]=value
+  return self
+end function
+
+map.remove=function(value)
+  if tp(value) == "null" then return false
+  v=self.values;i=self.indexes;newm={}
+  for ind in range(0, i.len-1);key=i[ind];val=v[ind]
+    if tp(value) == "number" then ;if value==ind then ;ind=ind+1;continue;end if;end if
+    if value == i[ind] then ;ind=ind+1;continue;end if
+    newm[key]=val
+  end for
+  self=newm
+  return self
+end function
+
+map.switch=function()
+  i=self.indexes;v=self.values;newm={}
+  for ind in range(0,i.len-1);newm[v[ind]]=i[ind];end for
+  return newm
+end function
+//["{", " "+"0".quote+": "+"ls /root/Config".quote," "+"1".quote+": "+"cat /root/Config/Bank.txt >|".quote, " "+"2".quote+": "+"cat |> --d ".quote, "}"]
+map.boot_cli_module=function()
+  self.display={}
+end function
+//t_map.boot_cli_module()
+map.run_cli_module=function(name, prompt, cnfMessage, displayModule, colorScheme="black black purple", bold=1, nanoMode=1)
+  if not displayModule.len then displayModule=[[""]] else displayModule=[displayModule]
+  if not bold then bold="" else bold="<b>";
+  config={"run": 1, "prompt": prompt, "cs": colorScheme, "display_module": displayModule, "reflected_module":[], "errorMsg":"", "curr_page":""}
+  self.display.module=function()
+    return config.display_module[-1]
+  end function
+  idr=@self.display.module//internal_display_reference
+  config.set_page=function(pageNumber)
+    config.curr_page=pageNumber
+  end function
+  self.display.set_page=@config.set_page
+  config.display=function(msg, pageNumber="")
+    ;res=[];confirm=0
+    list=idr.groupBy
+    if not list.hasIndex(config.curr_page) then config.curr_page=0
+    if tp(pageNumber) != "string" then config.curr_page=pageNumber
+    if tp(config.curr_page) == "string" then config.curr_page=list.len-1
+    ind=config.curr_page*10; if ind == 0 then ind=-1
+    page=list[config.curr_page]
+    if list.len <= 2 then pagel=range(config.curr_page, config.curr_page+list.len-1) else pagel=range(config.curr_page, config.curr_page+2)
+    while not list.hasIndex(pagel[-1]);pagel.remove(-1);end while
+    if list.len > 3 then ;confirm=1;pagel=pagel[:3];end if
+    page_indicator="pages: "+pagel.join(", ")
+    if confirm then page_indicator=page_indicator+"..."
+    for i in page
+      ind=ind+1
+      if ind < 10 then index=str(ind)+" " else index=str(ind)
+      line=bold+(index+"| ").color(config.cs.split(" ")[0]+" "+config.cs.split(" ")[2]+" "+config.cs.split(" ")[0])+i.color(config.cs)
+      res.push(line)
+    end for
+    diff=10-page.len;if diff < 0 then diff=0//;print diff
+    for i in range(0, diff);res.push("");end for
+    print(bold+res.join(c10))
+    print("<size=13>"+bold+(page_indicator).color(config.cs))
+    if msg=="" then ;print();return 1;end if
+    print(bold+msg)
+    return true
+  end function
+
+  config.cnf=function(name)
+    return bold+((("['").color("white")+(name.color("black"))+("']").color("white"))+cnfMessage)
+  end function
+  config.add_module=function(list)
+    if config.display_module.len == 25 then config.display_module.pull
+    config.display_module.push(list)
+  end function
+  self.display.result=0
+  self.display.cs=config.cs
+  self.display.add=function(data="");if idr[0]=="" and data != idr[0] then idr[0]=data else config.add_module(idr+[data]);end function
+  self.display.remove=function(index="0")
+    list=index.split(",").clean([""]);newl=[]
+    for i in list;if i.to_int < 0 then newl.push(idr.len-abs(i.to_int)) else newl.push(i.to_int);end for
+    list=newl.sort;ind=-1;newl=[]
+    for i in idr;ind=ind+1;if tp(list.indexOf(ind)) == "number" then continue;newl.push(i);end for
+    if not newl.len then ;newl=[""];config.curr_page=0;end if
+    config.add_module(newl)
+  end function
+  self.display.find=function(find_string); ind_list=[];ind=-1
+    for i in idr; ind=ind+1
+      if i.search(find_string) then ind_list.push(ind+1)
+    end for
+    return ind_list
+  end function
+
+  self.display.undo=function();if config.display_module.len > 1 then config.reflected_module.push(config.display_module.pop);end function
+  self.display.redo=function();if config.reflected_module.len > 0 then config.display_module.push(config.reflected_module.pop);end function
+
+  self.display.next_page=function();if idr.groupBy.hasIndex(config.curr_page+1) then config.curr_page=config.curr_page+1;end function
+  self.display.prev_page=function();if idr.groupBy.hasIndex(config.curr_page-1) then config.curr_page=config.curr_page-1;if config.curr_page < 0 then config.curr_page=0;end function
+
+  self.display.replace=function(index="0", data="")
+    list=index.split(",").clean([""]);newl=[];copy=idr.copy
+    for i in list;if i.to_int < 0 then newl.push(idr.len-abs(i.to_int)) else newl.push(i.to_int);end for
+    list=newl.sort;ind=-1;newl=[];
+    for i in idr; ind=ind+1
+      if tp(list.indexOf(ind)) == "number" then
+        if data.len > 0 and data[0] == "+" then copy[ind]=copy[ind]+data[1:] else copy[ind]=data
+      end if
+    end for
+    config.add_module(copy)
+  end function
+  self.display.insert=function(index=0, data="")
+    if index < 0 then index=idr.len-abs(index)
+    if not index then
+      idr=[data]+idr
+      return true
+    end if
+    p1=idr[:index];p2=idr[index:]
+    res=p1+[data]+p2
+    config.add_module(res)
+  end function
+  self.display.usage=function(obj)
+    res="<b>";next=c10+"<b>"
+    for i in obj
+      res=res+next+(i.key.upper+": ").color("black")
+      for elem in i.value
+        res=res+c10+bold+(elem).color("black purple")
+      end for
+    end for
+    return res
+  end function
+  self.back=function(cmd);config.run=0;cs;return {"status":1, "msg":""};end function;self.exit=@self.back;self.done=@self.back;self.save=@self.back
+  self.clear=function(cmd);cs;return {"status":1, "msg":""};end function
+  self.help=function(cmd)
+  end function
+  while config.run
+    if nanoMode then; cs
+      config.display(config.errorMsg)
+      config.errorMsg=""
+    else
+      if tp(config.errorMsg) == "string" and config.errorMsg.len > 0 then
+        print bar(40)
+        print config.errorMsg
+        config.errorMsg=""
+      end if
+    end if
+
+    cmd=ui(prompt).split(" ")
+    if not cmd.clean([" ", ""]).len then ;if nanoMode then ;self.display.add("");continue;end if;continue;end if
+    if tp(self.indexes[1:].indexOf(cmd.clean([" ", ""])[0])) != "number" then
+      if nanoMode then
+        if cmd.join(" ")[0]=="\" then cmd=cmd.join(" ")[1:].split(" ")
+        self.display.add(cmd.join(" "))
+        continue
+      end if
+      print c10+config.cnf(cmd.clean([" ", ""])[0]);continue
+    end if
+    cmd=cmd.clean([" ", ""])
+    proxy=@self[cmd[0]]
+    store=proxy(cmd)
+    if not tp(store) == "map" or tp(store) == "map" and store.indexes != ["status", "msg"] then exit(("master_lib.so: origin -> run_cli_module: custom commands must return object: {"+"status".quote+": bool, "+"msg".quote+": "+"string".quote+"}... ").color("red"))
+    if not store.status then ;config.errorMsg=store.msg;continue;else;config.errorMsg="";end if// print c10+store.msg.color("red")
+    if not nanoMode then ;self.display.result=store.msg;end if
+  end while
+  if nanoMode then return self.display.module
+  return self.display.result
+end function
+
+//number:
+number.decrement=function(size=1)
+  if tp(size) != "number" then size=1
+  self=self-size
+  return self
+end function;number.dec=@number.decrement
+
+number.increment=function(size=1)
+  if tp(size) != "number" then size=1
+  self=self+size
+  return self
+end function;number.inc=@number.increment
+
+generate={}
+generate.id=function(length=4, type="int")
+  if type.search("int") then ;pool="1234567890";else if type.search("str") then;pool="qwertyuiopasdfghjklzxcvbnm";else if type.search("hybrid") then;pool="qwertyuiopasdfghjklzxcvbnm1234567890";end if
+  pool=pool.values;res=[]
+  for i in range(1,length)
+    res.push(pool.rnd_ind)
+  end for
+  res=res.join("").to_int
+  return res
+end function
+
+map.editor_init=function()
+  self.module={"display":[[""]], "line":1, "cursor":0, "inverse":[], "process":1, "line_limit":0}
+  module=self.module
+  self.action={}
+  action=self.action
+
+  action.get_display=function()
+    return module.display[-1]
+  end function
+
+  action.add_display=function(value)
+    module.display.push(value)
+    if module.display.len == 50 then module.display=module.display[1:]
+  end function
+
+  action.undo=function()
+    if module.display.len == 1 then return
+    module.inverse.push(module.display.pop)
+  end function
+  action.redo=function()
+    if not module.inverse.len then return
+    module.display.push(module.inverse.pop)
+  end function
+
+  action.line_down=function()
+    if module.line == module.line_limit-1 then ;module.line=1;return;end if
+    module.line=module.line+1
+  end function
+  action.line_up=function()
+    if module.line == 1 then ;module.line=module.line_limit-1;return;end if
+    module.line=module.line-1
+  end function
+
+  action.cursor_right=function()
+    if module.cursor == 1 then return
+    module.cursor=module.cursor+1
+  end function
+  action.cursor_left=function()
+    if not module.cursor then return
+    module.cursor=module.cursor-1
+  end function
+
+  self.command={}
+
+  return self
+end function
+
+map.editor=function(input_msg, cnf_function, display_function, allowed_char_list, given_display=[""])
+  if not self.hasIndex("module") and not self.hasIndex("action") and not self.hasIndex("command") then return false
+  self.module.display[-1]=given_display
+  self.module.line_limit=given_display.len-1
+
+  while self.module.process; cs
+    display_function()
+    cmd=ui(input_msg, 0, 1)
+    if not allowed_char_list.has(cmd) then continue
+    if not self.command.hasIndex(cmd) then
+      cnf_function()
+      continue
+    end if
+    proxy=self.command[cmd]
+    proxy()
+  end while
+  return self.module.display[-1]
+end function
+
+map.get_key = function(search_for = [])
+  result_arr = []
+  index = -1;
+  for value in self.values
+    index = index + 1
+    if tp(search_for.indexOf(value)) == "number" then
+      result_arr.push(map.indexes[index])
+      continue
+    end if  
+  end for 
+end function
+//generic.so

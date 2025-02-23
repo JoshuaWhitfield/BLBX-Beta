@@ -1,0 +1,178 @@
+JSON={}
+
+JSON.write=function(map=false)
+	desc="<color=purple><b>JSON.write: this function takes any map object and parses it into a string in JSON format. does not support maps objects containing functions."
+	if map == "help" then exit(desc)
+
+	if typeof(map) != "map" then return "<color=red>inputed arg '"+map+"' is not a map."
+	if map=={} then return "{"+c10+"}"
+  concat=function(num, str);return (str*num);end function
+  this={}
+  this.toStr=function(string);return """"+string+"""";end function
+  this.pair=function(key,value,extra=false);if not extra then return key+": "+value+"," else return key+": "+value;end function
+  this.result=["{"]
+	this.transform=function(map)
+	 this.toggle=false;this.ind=-1
+	 list=map.indexes
+
+    for i in map
+			this.ind=this.ind+1;
+			if this.ind == list.len-1 then this.toggle=true
+
+			if typeof(i.key) == "string" then i.key=self.toStr(i.key)
+      if [(typeof(i.key) == "list"), (typeof(i.key) == "map"), (typeof(i.key) == "function")].indexOf(true) != null then continue
+      if typeof(i.value) == "string" and this.result.indexOf(self.pair(i.key , self.toStr(i.value), this.toggle)) == null then ;self.result.push(self.pair(i.key , self.toStr(i.value), this.toggle));continue;end if
+      if typeof(i.value) == "number" and this.result.indexOf(self.pair(i.key , i.value, this.toggle)) == null then ;self.result.push(self.pair(i.key , i.value, this.toggle));continue;end if
+      if typeof(i.value) == "list" then;temp=[];for ide in i.value;if typeof(ide) == "map" then continue;temp.push(ide);end for;if self.result.indexOf(self.pair(i.key , temp, this.toggle)) == null then self.result.push(self.pair(i.key , temp, this.toggle));continue;end if
+      if typeof(i.value) == "map" then ;self.result.push(i.key+": {");this.transform(i.value);continue;end if
+    end for
+    this.result.push("}")
+  end function
+
+  this.transform(map)
+
+  indent=0
+  newResult=[]
+  for i in this.result
+    v=i.split(": ")[0]
+    line=i.split(": ")
+    if line.len == 1 and v == "{" then ;newResult.push(concat(indent, " ")+i);indent=indent+2;continue;end if
+		if line.len == 1 and line[0].search("}") then ;indent=indent-2;newResult.push(concat(indent, " ")+i);continue;end if
+    if line.len > 1 and line[1].search("{") then ;newResult.push(concat(indent, " ")+i);indent=indent+2;continue;end if;
+		newResult.push(concat(indent, " ")+i)
+  end for
+  this.result=newResult.join(c10)
+  return this.result
+end function
+
+JSON.read=function(string="{}")
+  desc="<color=red><b>JSON.read: this function takes a serialized map and reverts it back to a usable map object."
+  if string == "help" then exit(desc)
+  if (tp(string) != "string") then return "<color=red>inputed arg '"+string+"' is not a string."
+  if string == "{}" or string=="{"+c10+"}" or string.values.clean([" ", ""]).len==0 then return {}
+  if string[0]!="{" then string="{"+string
+  if string[-1] != "}" then string=string+"}"
+
+  get_indent=function(string);count=0;while string[0]==" ";string=string[1:];count=count+1;end while;return count;end function
+	group_it=function(input_list)
+		l=[];ignore=0;temp=input_list
+		if temp[0] == "{" then temp=temp[1:]
+		while temp.len > 0
+			i=temp.pull
+			if ignore>0 then ;ignore=ignore-1;continue;end if
+			if i.search(": {") and get_indent(i) == 2 then
+				ind2=temp.indexOf("  }")
+				newl=temp[0:ind2]
+				while i[0] == " ";i=i[1:];end while
+				l.push([i]+newl)
+				ignore=newl.len
+				continue
+			end if
+			l.push(i)
+		end while
+
+		return l
+	end function
+
+  compile=function(mainl, gll, indent=4);ignore=0;
+		get_indent=function(s);count=0;while s[0]==" ";s=s[1:];count=count+1;end while;return count;end function
+		recursive_build=function(list, pouch)
+			ignore=0
+			if not list.len then return pouch
+			while list.len > 0
+				i=list.pull
+				if ignore > 0 then ;ignore=ignore-1;continue;end if
+				if i.search(": {") then
+					if i.search(": {}") then; pouch.push([i[:-1]]) ;continue;end if
+					ind2=list.indexOf((" "*get_indent(i))+"}")
+					newl=list[0:ind2]
+					ignore=newl.len
+					while i[0] == " ";i=i[1:];end while
+					pouch.push(recursive_build(newl, [i]))
+					if pouch[-1] == [] then pouch[-1].pop
+					continue
+				end if
+				while i[0] == " ";i=i[1:];end while
+				if i[-1] == "," then i=i[:-1]
+				if i.search("}") then continue
+				pouch.push(i)
+			end while
+			return pouch
+		end function
+		check_nested=function(list);if list.join("").search(": {") then return true;return false;end function
+		for i in mainl
+			if tp(i) == "list" then//["foo: {", ["bar: {"]] == {..."foo": {"bar":{}}...}
+				if not check_nested(i[1:]) then; gll.push(compile(i[1:], [i[0]])) ;continue;end if
+				gll.push(recursive_build(i[1:], [i[0]]))
+				continue
+			end if
+			if tp(i) == "string" and i.search(": {}") then; gll.push([i[:-1]]) ;continue;end if
+			if i.split(": ").len < 2 then continue
+			gll.push(i)
+		end for
+		return gll
+  end function
+	inputClean=function(l);ll=[];for i in l;if i == " " or i == "" then continue;ll.push(i);end for;return ll;end function
+  main=inputClean(string.split(c10))
+  glm={}
+
+  get_str=function(str);news="";for i in str;if i == """" then continue;news=news+i;end for;return news;end function
+  get_head=function(str);if tp(str.to_int) == "number" then return str.to_int;return get_str(str);end function
+
+
+  parse=function(mainl, input_map, fp=1)//this function is recursive
+		if fp then fp=0
+		if not mainl.len then return input_map
+		for i in mainl
+			while i[0] == " ";i=i[1:];end while
+			if i[-1] == "," then i=i[:-1]
+			if tp(i) == "list" then
+				if not i.len then continue
+				head=get_head(i[0].split(": ")[0]);if tp(head.to_int) == "number" then head=head.to_int
+				newl=i[1:]
+				input_map[head]=parse(newl, {}, 0)
+				continue
+      end if
+			if not i.split(": ").len > 1 then continue
+      head=get_head(i.split(": ")[0]);tail=i.split(": ")[1]
+
+			if tp(head) != "number" and tp(head.to_int) == "number" then head=head.to_int
+			if tail.search("[") then
+				temp=i.split(": ")[-1]
+				temp=temp.replace("\[", "");temp=temp.replace("\]", "")
+				chain=temp.split(", ");newl=[];ignore=0
+				for ide in chain
+					if ide.search("[]") then ;newl.push([]);continue;end if;
+					if ide.search("]") then ;ignore=0;continue;end if
+					if ignore then continue
+					if ide.search("""") then ;newl.push(get_str(ide));continue;end if
+					if not ide.search("""") and tp(ide.to_int)=="number" then ;newl.push(ide.to_int);continue;end if
+					if not ide.search("""") and tp(ide.to_int)!="number" then;if ide=="true" then;newl.push(1);else if ide=="false" then;newl.push(0);else;newl.push(ide);end if;continue;end if
+					if ide.search("[") then ignore=1
+				end for
+				input_map[head]=newl
+				continue
+			end if
+      if tail.search("""") then;if get_str(tail)=="true" then input_map[head]=1;if get_str(tail)=="false" then input_map[head]=0;if tail.search("""") then input_map[head]=get_str(tail);continue;end if
+			if not tail.search("""") and tp(tail.to_int)=="number" then ;input_map[head]=tail.to_int;continue;end if
+			if not tail.search("""") and tp(tail.to_int) != "number" then
+				if tail=="true" then;input_map[head]=1;else if tail == "false" then;input_map[head]=0;else;input_map[head]=tail;end if
+				continue
+			end if
+		end for
+
+		return input_map
+  end function
+
+	raw_compile=group_it(main)
+	glm=parse(compile(raw_compile, []), {})
+	//print glm
+  return glm
+end function
+
+//testf=hc.File("/root/blackbox/db/.exploit/.exploit-1")
+//print testf.get_content+c10+c10
+//JSON.read(testf.get_content)
+//exit
+
+//json.so
