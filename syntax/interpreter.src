@@ -6,9 +6,10 @@ Interpreter.ast_arr = []
 Interpreter.chain_output = []
 Interpreter.position = 0
 
-Interpreter.wipe = function()
+Interpreter.wipe = function(wipe_chain = 0)
     self.ast_arr = []
     self.position = 0
+    if wipe_chain then self.chain = []
 end function 
 
 Interpreter.get_ast_arr = function()
@@ -108,7 +109,7 @@ Interpreter.Execute = function(input)
     count = -1
     for cmd in cmd_arr 
         Parser.wipe()
-        self.wipe()
+        Interpreter.wipe()
         _callback.debug("<color=green>"+cmd, "interpreter".c("purple"), 108)
         _callback.debug("<color=green>"+self.ast_arr, "interpreter".c("purple"), 109)
         command_ast = Parser.ParseCLI(input)

@@ -77,7 +77,7 @@ _json = {}
 ///-- input for scaffolding and parsing.
 
 _json.lexer = {}
-_json.lexer.TokenTypes = { "Key":"KEY", "Map": "MAP", "List": "LIST", "CloseList": "CLOSELIST", "CloseMap": "CLOSEMAP", "String": "STRING", "Number": "NUMBER", "Null": "NULL" }
+_json.lexer.TokenTypes = { "Key":"KEY", "Map": "MAP", "List": "LIST", "CloseList": "CLOSELIST", "CloseMap": "CLOSEMAP", "String": "STRING", "Number": "NUMBER" }
 _json.lexer.token_output = []
 _json.lexer.input = ""
 _json.lexer.position = 0 
@@ -149,15 +149,11 @@ _json.lexer.next_token = function()
         
         //Create String Token
         keyword = value
-        _callback.debug(keyword, "checking keys".c("purple"), 151)
         return { "type": self.TokenTypes.String, "value": keyword.values.clean(["""", ","]).join("").trim }
     end if 
 
-    _callback.debug(value, "checking extra".c("purple"), 151)
-    if value.search("null") then return { "type": self.TokenTypes.Null, "value": null }
-
     //Create Number Token
-    if value.is_match("\d") then 
+    if self.get_input().len and value.is_match("\d") then 
         number = value
         return { "type": self.TokenTypes.Number, "value": number.values.clean([",", char(10)]).join("").val }
     end if 
@@ -265,7 +261,6 @@ _json.scaffold.parse_map = function(input_array, output_array = 0)
             skip = true
             continue 
         end if 
-        
         output_array.push(element)
     end for 
 
@@ -299,10 +294,6 @@ _json.scaffold.parse_list = function(input_array, output_array)
             new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
             count = new_input_array.len 
             skip = true 
-            print element 
-            print new_input_array
-            _callback.debug(element, "json element", 297)
-            _callback.debug(new_input_array, "json new_input_array", 298)
             output_array.push(self.parse_map(new_input_array))
             continue
         end if 
@@ -386,16 +377,6 @@ _json.parser.parse_map = function(input_array, output_object = 0)
             skip = true 
             continue 
         end if 
-        if element.type == _json.lexer.TokenTypes.Map then 
-            output_object[element.value] = self.parse_map(input_array[index + 1])
-            skip = true 
-            continue 
-        end if 
-        if element.type == _json.lexer.TokenTypes.List then 
-            output_object[element.value] = self.parse_list(input_array[index + 1])
-            skip = true 
-            continue
-        end if 
     end for 
 
     return output_object
@@ -472,7 +453,7 @@ JSON = {}
 JSON.internal = _json
 
 // JSON stringify
-JSON.write = function(map_object = {}, indentation = 2, jump = 2)
+JSON.stringify = function(map_object = {}, indentation = 2, jump = 2)
     if not map_object.len then return "{}"
     if not typeof(["map", "list"].indexOf(typeof(map_object))) == "number" then return false 
 
@@ -484,11 +465,11 @@ JSON.write = function(map_object = {}, indentation = 2, jump = 2)
     if typeof(map_object) == "list" then 
         for element in map_object 
             if typeof(element) == "map" then 
-                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + self.write(element, (indentation + jump))
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + self.stringify(element, (indentation + jump))
                 continue 
             end if 
             if typeof(element) == "list" then 
-                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + self.write(element, (indentation + jump))
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + self.stringify(element, (indentation + jump))
                 continue 
             end if 
             if typeof(element) == "string" then 
@@ -499,8 +480,8 @@ JSON.write = function(map_object = {}, indentation = 2, jump = 2)
                 result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + element
                 continue 
             end if
-            if typeof(element) == "null" then 
-                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + "Null"
+            if typeof(element) == "function" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + "Function()"
                 continue 
             end if
         end for 
@@ -512,19 +493,23 @@ JSON.write = function(map_object = {}, indentation = 2, jump = 2)
         key = element.key 
         value = element.value 
         if typeof(value) == "map" then 
-            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + self.write(value, (indentation + jump))
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + self.stringify(value, (indentation + jump))
             continue 
         end if 
         if typeof(value) == "list" then 
-            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + self.write(value, (indentation + jump))
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + self.stringify(value, (indentation + jump))
             continue 
         end if 
         if typeof(value) == "string" then
             result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + value.quote
             continue 
         end if 
-        if typeof(value) == "null" then 
-            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": Null"
+        if typeof(value) == "number" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + value
+            continue 
+        end if 
+        if typeof(value) == "function" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": Function()"
             continue 
         end if 
     end for 
@@ -534,10 +519,10 @@ JSON.write = function(map_object = {}, indentation = 2, jump = 2)
     return result 
 end function 
 
-//write = JSON.write({"hello": "world", "number": 1234, "map": {"number2": "5678", "list": [1, 2, 3, ["sub_arr"]]}, "list2": ["1234", 5678, {"sub": "map"}]})
+//stringify = JSON.stringify({"hello": "world", "number": 1234, "map": {"number2": "5678", "list": [1, 2, 3, ["sub_arr"]]}, "list2": ["1234", 5678, {"sub": "map"}]})
 
 // JSON parse
-JSON.read = function(serialized_object = "{" + char(10) + "}") 
+JSON.parse = function(serialized_object = "{" + char(10) + "}") 
     if typeof(["{" + char(10) + "}", "{}"].indexOf(serialized_object)) == "number" then return {}
     self.internal.lexer.set_input(serialized_object.split(" ").clean([""]))
     tokens = self.internal.lexer.tokenize()
@@ -547,5 +532,5 @@ JSON.read = function(serialized_object = "{" + char(10) + "}")
     return self.internal.parser.parse(scaffold) 
 end function 
 
-//print JSON.parse(write)
+//print JSON.parse(stringify)
 
