@@ -1,0 +1,32 @@
+import_code("/root/blackbox/json")
+import_code("/root/blackbox/generic")
+import_code("/root/blackbox/callback")
+import_code("/root/blackbox/internal")
+import_code("/root/blackbox/markup")
+
+nested_maps = {"map1": {"map2": {"map3": {"map4": {}}}}}
+nested_arrays = {"list1": [1, [2, [3, [4, "final"]]]]}
+
+dynamic_arrays = {"list1": [1, [2, [3, {"map1": {"list2": [{"sub": "map"}]}}]]]}
+shallow_maps = Session.db.parse("exploit")
+shallows_arrays = {}
+
+attempts = [["nested maps", nested_maps, nested_maps.len], ["nested arrays", nested_arrays, nested_arrays.len], ["dynamic arrays", dynamic_arrays, dynamic_arrays.len], ["shallow maps", shallow_maps, shallow_maps.len]]
+_callback.toggle_debug() // on
+for attempt in attempts 
+    attempt_name = attempt[0]
+    attempt_body = attempt[1]
+    attempt_len = attempt[2]
+    add_line
+    add_line
+    _callback.debug(attempt_body, attempt_name, attempt_len)
+    stringified_object = JSON.write(attempt_body)
+    add_line 
+    printb("parsing object...".c("purple"))
+    wait(.5)
+    parsed_object = JSON.read(stringified_object)
+    add_line
+    printb("PARSED OBJECT: ".c("black"))
+    _callback.debug(parsed_object, "parsed object", parsed_object.len)
+end for 
+_callback.toggle_debug() // off

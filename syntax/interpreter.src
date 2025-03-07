@@ -41,10 +41,10 @@ end function
 Interpreter.determine_execution_type = function()
     if not self.ast_arr.len then return _callback.catch("", 0)
     assign_token = {"type": TokenTypes.Assign, "value": "="}
-    _callback.debug(self.ast_arr[0].type, "interpreter", 44)
-    _callback.debug(self.ast_arr[0], "interpreter", 45)
-
-    if typeof([TokenTypes.Command, ].indexOf(self.ast_arr[0].type)) == "number" and (self.ast_arr[0].hasIndex(params) and typeof(self.ast_arr[0].params.indexOf(assign_token)) == "number") then
+    _callback.debug(self.ast_arr[0].type == TokenTypes.Command, "interpreter is_command", 44)
+    _callback.debug(self.ast_arr[0].params, "interpreter params", 45)
+    
+    if self.ast_arr[0].type == TokenTypes.Command and ((self.ast_arr[0].hasIndex(params) and typeof(self.ast_arr[0].params.indexOf(assign_token)) == "number")) then
         assignment = self.ast_arr[0].params
         if not assignment.len == 2 then 
             Usage.display("syntax_assign", Usage.get_usage_object("syntax_assign"))

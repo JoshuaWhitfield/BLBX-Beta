@@ -128,7 +128,8 @@ Lexer.next_token = function()
             return { "type": TokenTypes.Macro, "value": keyword }
         end if 
         //print{ "type": TokenTypes.Argument, "value": keyword }
-        return { "type": TokenTypes.Argument, "value": keyword }
+        
+        if not tp("(){}=,|".values.indexOf(keyword)) then return { "type": TokenTypes.Argument, "value": keyword }
 
     end if 
 

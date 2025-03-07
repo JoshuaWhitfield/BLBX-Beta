@@ -1,9 +1,14 @@
 _callback = {}
+_callback.debug_mode = false 
+_callback.toggle_debug = function()
+    self.debug_mode = not self.debug_mode
+    return self.debug_mode
+end function 
 _callback.catch = function(message = "", status = 0)
     if tp(message) == "string" then message = message
     return { "status": status, "data": message }
 end function
 _callback.debug = function(data, file_name, line_number)
-    print JSON.write({"location": file_name, "line No.": line_number, "contents": data})
+   if self.debug_mode then print JSON.write({"location": file_name, "line No.": line_number, "contents": data})
 end function 
 //callback

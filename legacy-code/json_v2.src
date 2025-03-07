@@ -217,41 +217,6 @@ _json.scaffold.consume = function()
     return result
 end function 
 
-_json.scaffold.parse_list = function(input_arr, output_array)
-    if not output_array then output_array = []
-    count = 0
-    skip = false 
-    for element in input_arr 
-        if skip then 
-            if not count then skip = false 
-            if count > 0 then count = count - 1 
-            continue 
-        end if    
-        self.consume()
-        if element.type == _json.lexer.TokenTypes.List then 
-            output_array.push(element)
-            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseList, "value": "]"}) + 1)
-            count = new_input_arr.len 
-            skip = true
-            output_array.push(self.parse_list(new_input_arr))
-            continue 
-        end if 
-
-        if element.type == _json.lexer.TokenTypes.Map then 
-            output_array.push(element)
-            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
-            count = new_input_arr.len 
-            skip = true 
-            output_array.push(self.parse_map(new_input_arr))
-            continue
-        end if 
-       
-        output_array.push(element)
-    end for 
-  
-    return output_array
-end function 
-
 _json.scaffold.parse_map = function(input_arr, output_array = 0)
     if not output_array then output_array = []
     skip = false 
@@ -286,6 +251,41 @@ _json.scaffold.parse_map = function(input_arr, output_array = 0)
 
     return output_array
 end function
+
+_json.scaffold.parse_list = function(input_arr, output_array)
+    if not output_array then output_array = []
+    count = 0
+    skip = false 
+    for element in input_arr 
+        if skip then 
+            if not count then skip = false 
+            if count > 0 then count = count - 1 
+            continue 
+        end if    
+        self.consume()
+        if element.type == _json.lexer.TokenTypes.List then 
+            output_array.push(element)
+            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseList, "value": "]"}) + 1)
+            count = new_input_arr.len 
+            skip = true
+            output_array.push(self.parse_list(new_input_arr))
+            continue 
+        end if 
+
+        if element.type == _json.lexer.TokenTypes.Map then 
+            output_array.push(element)
+            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
+            count = new_input_arr.len 
+            skip = true 
+            output_array.push(self.parse_map(new_input_arr))
+            continue
+        end if 
+       
+        output_array.push(element)
+    end for 
+  
+    return output_array
+end function 
 
 _json.scaffold.parse = function(output_array = 0)
     if not output_array then output_array = []
@@ -368,6 +368,7 @@ _json.parser.parse_map = function(input_arr, output_object = 0)
     for element in input_arr 
         index = index + 1
         if skip then ;skip = false;continue;end if
+        if typeof(element) == "list" then continue
         if element.type == _json.lexer.TokenTypes.Key then 
             output_object[element.value] = input_arr[index + 1].value
             skip = true 
