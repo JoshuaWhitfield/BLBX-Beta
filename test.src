@@ -1,8 +1,0 @@
-string.search = function(sub_string = "")
-  return tp(self.lower.indexOf(sub_string.lower)) == "number";
-end function
-import_code("/root/blackbox/json")
-
-object = {"list": [{"map":1}]}
-
-print JSON.write(object)
