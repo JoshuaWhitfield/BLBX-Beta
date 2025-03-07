@@ -67,22 +67,27 @@ Lexer.next_token = function()
         flag = ch
         temp_flag = ch
         flag_content = []
-        fill_toggle = false
+        bracket_toggle = false
         
-        while self.get_input().len > 0 and (ch.is_match("\-+") or ch.is_match("[a-zA-Z0-9_]+") or ch.is_match("\[\d+(,\s?\d+)*\]"))
-            temp_flag = temp_flag + self.consume()
+        while self.get_input().len > 0 and (ch.is_match("\-+") or ch.is_match("[a-zA-Z0-9_]+") or ch.is_match("\[\S+(,\s+?\S+)*\]"))
+            next_char = self.consume()
+            if next_char.is_match("\[") then bracket_toggle = true
+            if not bracket_toggle and next_char.is_match("\s") then 
+                break
+            end if 
+            
+            temp_flag = temp_flag + next_char
         end while 
 
         return { "type": TokenTypes.Flag, "value": temp_flag }
     end if 
-    if ch == "-" then return { "type": TokenTypes.Flag, "value": ch }
     
     //Handle numbers
     if ch.is_match("\d") then 
         number = ch
         //if ch == " " and number.len > 1 then return { "type": TokenTypes.Float, "value": number }
         
-        while self.get_input().len > 0 and ch.is_match("\d|\.")
+        while self.get_input().len > 0 and self.get_input()[self.position].is_match("\d|\.")
             next_number = self.consume()
             if tp(("abcdefghigklmnopqrstuv" + "abcdefghigklmnopqrstuv ".upper).values.indexOf(next_number)) == "number" then break
             number = number + next_number
@@ -92,11 +97,11 @@ Lexer.next_token = function()
     end if
 
     //Handle commands
-    if ch.is_match("[a-zA-z_]") then 
+    if ch.is_match("[a-zA-z_]") or ch.is_match("\/") then 
 
         keyword = ch
         
-        while self.get_input().len > 0 and self.get_input()[self.position].is_match("[a-zA-Z0-9_]")
+        while self.get_input().len > 0 and (self.get_input()[self.position].is_match("[a-zA-Z0-9_-]") or self.get_input()[self.position].is_match("\/") or self.get_input()[self.position].is_match("\."))
 			keyword = keyword + self.consume()
         end while 
 
@@ -109,6 +114,24 @@ Lexer.next_token = function()
         return { "type": TokenTypes.Argument, "value": keyword }
     end if
 
+    //Handle Macros 
+    if ch.is_match("$+") then 
+        keyword = ch 
+
+        while self.get_input().len > 0 and (self.get_input()[self.position].is_match("[a-zA-Z0-9_-]") or self.get_input()[self.position].is_match("\.") or self.get_input()[self.position].is_match("@"))
+            keyword = keyword + self.consume()
+        end while 
+
+        if self.first_token then 
+            self.first_token = false 
+            //print { "type": TokenTypes.Command, "value": keyword }
+            return { "type": TokenTypes.Macro, "value": keyword }
+        end if 
+        //print{ "type": TokenTypes.Argument, "value": keyword }
+        return { "type": TokenTypes.Argument, "value": keyword }
+
+    end if 
+
     //Handle punctuation (including comma for argument separation)
     if tp("(){}=,|".values.indexOf(ch)) == "number" then self.consume()
     if ch == "(" then return { "type": TokenTypes.ParenOpen, "value": ch }
@@ -118,6 +141,16 @@ Lexer.next_token = function()
     if ch == "=" then return { "type": TokenTypes.Assign, "value": ch }
     if ch == "," then return { "type": TokenTypes.Comma, "value": ch }
     if ch == "|" then return { "type": TokenTypes.Pipe, "value": ch }
+    if ch.is_match("\.") then 
+        dot_token = ch
+
+        while self.get_input().len > 0 and self.get_input()[self.position].is_match("\.")
+            next_char = self.consume()
+            dot_token = dot_token + next_char
+        end while 
+
+        return { "type": TokenTypes.Dot, "value": dot_token }
+    end if 
     //if ch.is_match("\.") then return { "type": TokenTypes.Dot, "value": ch }
 
     return true; //unexpected token

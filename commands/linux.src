@@ -17,7 +17,7 @@ command.ls = function(PARAMS)
     store = {"root_file": false, "target_file":false}
     init = function()
 
-        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.user.current.name), get_shell.host_computer.File("/"))
+        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.ip.get_lan()), get_shell.host_computer.File("/"))
         if not tp(store.root_file) == "file" then return _callback.catch("[blbx][cd][err]: remote session has no file objects...")
         current_path_file = Directory.find_file(store.root_file, Prompt.get_current_path())
         
@@ -61,8 +61,9 @@ end function
 command.cd = function(PARAMS)
     store = {"root_file": false, "target_file":false}
     init = function()
-        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.user.current.name), get_shell.host_computer.File("/"))
+        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.ip.get_lan()), get_shell.host_computer.File("/"))
         if not tp(store.root_file) == "file" then return _callback.catch("[blbx][cd][err]: remote session has no file objects...")
+        
         current_path_file = Directory.find_file(store.root_file, Prompt.get_current_path())
         
         
@@ -74,9 +75,9 @@ command.cd = function(PARAMS)
         if PARAMS.len != 1 then return _callback.catch("[blbx][cd][usage]: cd [<file_path> | <file_name>]")
         
         param_token = PARAMS[0]
-        if tp([TokenTypes.String, TokenTypes.Argument, TokenTypes.Float].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][cd][err]: second argument must be a string or argument...")   
+        if tp([TokenTypes.String, TokenTypes.Argument, TokenTypes.Dot].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][cd][err]: second argument must be a string or argument...")   
         
-        if param_token.type == TokenTypes.Float and (param_token.value.is_match("\.+")) then 
+        if param_token.type == TokenTypes.Dot and (param_token.value.is_match("\.+")) then 
             if param_token.value == "." then
                 print
                 return _callback.catch(current_path_file, 1)
@@ -84,7 +85,7 @@ command.cd = function(PARAMS)
 
             if param_token.value == ".." then 
                 print
-                return _callback.catch(current_path_file.parent, 1)
+                return _callback.catch(fif(current_path_file.path == "/", current_path_file, current_path_file.parent), 1)
             end if 
 
             if param_token.value == "..." then
@@ -108,7 +109,7 @@ end function
 command.cat = function(PARAMS)
  store = {"root_file": false, "target_file":false}
     init = function()
-        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.user.current.name), get_shell.host_computer.File("/"))
+        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.ip.get_lan()), get_shell.host_computer.File("/"))
         if not tp(store.root_file) == "file" then return _callback.catch("[blbx][cd][err]: remote session has no file objects...")
 
         if not PARAMS.len then 
@@ -142,12 +143,13 @@ end function
 command.rm = function(PARAMS)
     store = {"root_file": false, "target_file": false}
     init = function()
-        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.user.current.name), get_shell.host_computer.File("/"))
+        store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.ip.get_lan()), get_shell.host_computer.File("/"))
         if not tp(store.root_file) == "file" then return _callback.catch("[blbx][cd][err]: remote session has no file objects...")
         current_path_file = Directory.find_file(store.root_file, Prompt.get_current_path())
 
         if not PARAMS.len then
-            return _callback.catch(Directory.find_file(store.root_file, Prompt.get_current_path()), 1)
+            Usage.display("rm", Usage.get_usage_object("rm"))
+            return _callback.catch("", 0)
         end if 
 
         if PARAMS.len != 1 then return _callback.catch("[blbx][ls][usage]: ls [<file_path> | <file_name>]")
@@ -155,7 +157,7 @@ command.rm = function(PARAMS)
         param_token = PARAMS[0]
         if tp([TokenTypes.String, TokenTypes.Argument].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][ls][err]: second argument must be a string or argument...")   
     
-        valid_file = Directory.validate_file(store.root_file, "ls", PARAMS)
+        valid_file = Directory.validate_file(store.root_file, "rm", PARAMS)
         return valid_file
     end function
     error_handling = init()
@@ -167,34 +169,35 @@ command.rm = function(PARAMS)
 end function 
 
 command.find = function(PARAMS)
-    store = {"root_file": false, "target_file": false, "content": false, "name": false, "path": true}
-    store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.user.current.name), get_shell.host_computer.File("/"))
+    store = {"root_file": false, "target_file": false}
+    store.root_file = fif(Session.process.is_connected(), Session.borrow("file", Session.machine.ip.get_lan()), get_shell.host_computer.File("/"))
     if not tp(store.root_file) == "file" then return _callback.catch("[blbx][cd][err]: remote session has no file objects...")
     current_path_file = Directory.find_file(store.root_file, Prompt.get_current_path())
     
     init = function()
         if not PARAMS.len then
             Usage.display("find", Usage.get_usage_object("find"))
-            return _callback.catch("", 1)
+            return _callback.catch("", 0)
         end if 
         
         param_token = PARAMS[0]
         if tp([TokenTypes.String, TokenTypes.Argument].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][find][err]: second argument must be a string or argument...")   
-    
-        for token in PARAMS[0]
-            if token.type == TokenTypes.Flag then 
-                token_value = token.value.values.clean(["-"]).join("")
-                if tp(["content", "c"].indexOf(token_value.lower)) == "number" then store.content = true
-            end if
-        end for 
 
-        valid_file = Directory.validate_file(store.root_file, "ls", PARAMS)
+        valid_file = Directory.validate_file(store.root_file, "find", PARAMS, 0, 1)
         return valid_file
     end function
     error_handling = init()
     if not error_handling.status then return error_handling
 
-    return error_handling
+    add_line
+    for file_object_arr in error_handling.data 
+        object = file_object_arr[0]
+        printb("file path: ".c("black") + object.path.c("purple"))
+        printb("file name: ".c("black") + object.name.c("purple"))
+        add_line
+    end for 
+
+    return _callback.catch(error_handling.data, 1)
 end function 
 command["--f"] = @command.find
 
@@ -203,11 +206,11 @@ command.apt = function(PARAMS)
     run = {"upgrade": 0, "update": 0, "addrepo": 0, "delrepo": 0, "search": 0, "show": 0, "install": 0}
     init = function()
         config.apt_client = Exploit.module.get_local_lib("aptclient.so")
-        if not (config.apt_client) == "aptclientLib" then return _callback.catch("[blbx][apt][err]: 'aptclient.so' library not found on machine...")
+        if not (config.apt_client) == "aptclientLib" then return _callback.catch("[blbx][apt][err]: 'aptclient.so' library not found on local machine...")
         
         if PARAMS.len < 1 then 
             Usage.display("apt", Usage.get_usage_object("apt"))
-            return _callback.catch("", 1)
+            return _callback.catch("", 0)
         end if 
 
         flags_arr = Params.extract_type(PARAMS, [TokenTypes.Flag])
@@ -352,18 +355,18 @@ end function
 
 command.show = function(PARAMS)
     init = function()
+        //if not (Session.object.shell.list + Session.object.computer.list + Session.object.file.list).len then return _callback.catch("[blbx][show][err]: no objects obtained from target. please run [attack] first...")
         return _callback.catch("", 1)
     end function 
     error_handling = init()
     if not error_handling.status then return error_handling
-    if not (Session.object.shell.list + Session.object.computer.list + Session.object.file.list).len then return _callback.catch("", 1)
     
     Exploit.device.show_tree()
 
     return _callback.catch("", 1)
 end function 
 
-command.nmap = function(PARAMS)
+command.nmap = function(PARAMS, data = 0)
     config = {"rhost": 0}
     init = function()
         if not PARAMS.len then 
@@ -405,219 +408,102 @@ command.nmap = function(PARAMS)
     info.format_columns
     print 
 
-    return _callback.catch("", 1) 
+    return _callback.catch(config.rhost, 1) 
 end function 
 
-command.sweep = function(PARAMS)
-    config = {"amount": 1, "ports": [], "rhost": 0}
+command.ps = function(PARAMS)
     init = function()
-        // sweep <target amount> OPTION: -port[<port_number>, ...]
-        if not PARAMS.len then 
-            Usage.display("sweep", Usage.get_usage_object("sweep"))
-            return _callback.catch("", 0)
-        end if 
-
-        target_amount = Params.extract_type(PARAMS, [TokenTypes.Float])[0]
-        if not target_amount then target_amount = 1 else target_amount = target_amount.value
-
-        target_ports = Params.extract_flags(PARAMS)
-        if target_ports.len then 
-            for flag in target_ports
-                flag = flag + " "
-                if flag.is_match("\[*\]") then 
-                    flag = slice(flag, flag.values.indexOf("["), flag.values.indexOf("]") + 1)
-                    target_ports = Params.extract_flag_content(flag)
-                end if
-            end for
-        end if
-        if not target_ports then target_ports = []
-
-        config.amount = target_amount 
-        config.ports = target_ports
-
-        return _callback.catch("", 1)
-    end function
-    error_handling = init()
-    if not error_handling.status then return error_handling
-    
-    count = 0
-    matching_ip_address_arr = []
-    
-    while count < config.amount.to_int
-        config.rhost = Session.machine.ip.random_ip()
-        target_ports = Exploit.module.grab_ports(config.rhost, config.ports, fif(config.ports.len, 0, 1))
-
-        if not target_ports or not target_ports.len then continue 
-
-        found = [] 
-        for port in target_ports 
-            for check_port in config.ports 
-                if check_port.to_int == port.port_number then found.push(port)
-            end for 
-        end for 
-        
-        if not found.len == config.ports.len then continue 
-        
-        matching_ip_address_arr.push(config.rhost)
-        Prompt.prepare_input(("nmap " + config.rhost))
-        count = count + 1
-    end while 
-
-
-
-    return _callback.catch(matching_ip_address_arr, 1)
-end function
-command.sw = @command.sweep
-
-command.attack = function(PARAMS) //attack ip_address port_number -scan -cgp -fw
-    config = {"rhost": "", "lan_address": "", "scan": 0, "change_password": 0, "fire_wall": 0, "ports": [], "attack_router": 0, "third_arg": 0}
-    init = function()
-        if not PARAMS.len then
-            Usage.display("attack", Usage.get_usage_object("attack"))
-            return _callback.catch("", 1)
-        end if 
-
-        config.rhost = Params.extract_type(PARAMS[:1], [TokenTypes.Number, TokenTypes.String])[0].value
-        if not config.rhost then return _callback.catch("[blbx][attack][err]: must enter a valid ip address...")
-        if not is_valid_ip(config.rhost) then return _callback.catch("[blbx][attack][err]: invalid public ip address...")
-        
-        number_tokens_arr = Params.extract_type(PARAMS[1:], [TokenTypes.Number])[0] 
-        flags_arr = Params.extract_flags(PARAMS[1:])
-
-        if number_tokens_arr.len then 
-            for number_token in number_tokens_arr 
-                config.ports.push(number_token.value)
-            end for
-        end if
-
-        if flags_arr.len then 
-            for flag in flags_arr
-                flag = flag.value
-                if tp(["scan", "s"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then config.scan = 1
-                if tp(["cgp", "c"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then config.change_password = 1
-                if tp(["fw", "f"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then config.fire_wall = 1
-                if tp(["router", "r"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then 
-                    Session.machine.set_net_session(Exploit.module.get_local_lib("metaxploit.so"))
-                    Session.machine.get_net_session().net_use(config.rhost)
-                    config.attack_router = 1
-                end if 
-                flag = flag + " "
-                if flag.is_match("\[*\]") then 
-                    flag = slice(flag, flag.values.indexOf("["), flag.values.indexOf("]") + 1)
-                    config.ports = Params.extract_flag_content(flag)
-                end if
-            end for
-        end if
-
-        return _callback.catch("", 1)
-    end function
-
-    error_handling = init()
-    if not error_handling.status then return error_handling
-
-    if config.ports.len and config.ports.has("0") then
-        Exploit.set_net_session(Exploit.module.get_local_lib("metaxploit.so").net_use(config.rhost))
-        config.ports = ["0"]
-    end if
-
-    attack_ports = Exploit.module.grab_ports(config.rhost, config.ports, fif(config.ports.len, 0, 1))
-    if not attack_ports then return _callback.catch("[blbx][attack][err]: ip address '"+config.rhost+"' is not reachable...")
-
-    success = false
-
-    for port in attack_ports
-        if port.is_closed then continue 
-        if not Exploit.module.get_local_lib("metaxploit.so") then return _callback.catch("[blbx][attack][err]: 'metaxploit.so' library not found on local machine... ")
-        Exploit.set_net_session(Exploit.module.get_local_lib("metaxploit.so").net_use(config.rhost, port.port_number))
-        if not tp(Exploit.get_net_session()) == "NetSession" then 
-            printb("[blbx][attack][warning]: net-session failed to start...".c("black black purple"))
-            continue
-        end if 
-        config.lan = port.get_lan_ip 
-        
-        handle_bool_flags = function()
-            return fif((config.change_password), 1, fif((config.fire_wall), 1, 0))
-        end function
-
-
-        Session.machine.ip.add_pub_address(config.rhost)
-
-        attack_result = Exploit.attack(config.lan, config.scan, handle_bool_flags())
-        
-        if not attack_result.status then 
-            print            
-            printb(attack_result.data.c("black black purple"))
-            print
-            continue
-        end if 
-
-        if not attack_result then 
-            printb("attack failed...".c("black black purple"))
-            continue 
-        end if 
-
-        success = true
-    end for 
-
-    if success then Prompt.prepare_input("show")
-
-    return _callback.catch("", 1)
-end function 
-command["atk"] = @command.attack
-
-command.connect = function(PARAMS)
-    config = {"lan_address": 0, "as_user": 0}
-    init = function()
-        if not PARAMS.len then 
-            Usage.display("connect", Usage.get_usage_object("connect"))
-            return _callback.catch("", 0)
-        end if 
-
-        lan_address = Params.extract_type(PARAMS, [TokenTypes.Float])[0]
-        username = Params.extract_type(PARAMS, [TokenTypes.String, TokenTypes.Argument])[0]
-        if not lan_address then return _callback.catch("[blbx][connect][err]: must include a lan address argument...")
-        if not is_lan_ip(lan_address.value) then return _callback.catch("[blbx][connect][err]: invalid lan address '" + lan_address + "'...")
-        if not Exploit.device.has(lan_address.value) then return _callback.catch("[blbx][connect][err]: device map does not contain lan address '" + lan_address.value + "'...")
-        config.lan_address = lan_address.value
-
-        username_arr = Exploit.device.user_map[config.lan_address]
-
-        if username then 
-            if not tp(username_arr.indexOf(username.value.lower)) == "number" then return _callback.catch("[blbx][connect][err]: username not found in device '" + config.lan_address + "'...")
-            config.username = username.value.lower
-        else 
-            if tp(username_arr.indexOf("root")) == "number" then config.username = "root"
-            if username_arr.len and (tp(username_arr.indexOf("root")) != "number" and tp(username_arr.indexOf("guest")) != "number") then config.username = username_arr[0]
-            if tp(username_arr.indexOf("guest")) == "number" then congfig.username = "guest"
-        end if
-        
-        if not config.username then return _callback.catch("[blbx][connect][err]: username not found in device '" + config.lan_address + "'...")
-
-        return _callback.catch("", 1)
-    end function
-    error_handling = init()
-    if not error_handling.status then return error_handling
-
-    Exploit.device.set_current(config.lan_address)
-    Session.machine.ip.set_lan(config.lan_address)
-    Session.process.set_connected(true)
-
-end function 
-
-command.rat = function(PARAMS)
-
-    init = function()
-        if not Session.process.is_connected() then return _callback.catch("[blbx][rat][err]: must [connect] to a target to use [rat] exploit...")
-
-        Usage.display("rat", Usage.get_usage_object("rat"))
-        if not PARAMS.len > 1 then return _callback.catch("[blbx][rat][usage]: ")
-    
         return _callback.catch("", 1)
     end function 
     error_handling = init()
     if not error_handling.status then return error_handling
 
-    return _callback.catch("", 1)
-end function  
+    if Session.process.is_connected() then 
+        computer_instance = Session.borrow("computer", Session.machine.ip.get_lan())
+        if not tp(computer_instance) == "computer" then return _callback.catch("[blbx][ps][err]: no computer objects from machine '" + Session.machine.ip.get_lan() + "' stored...")
+    else 
+        computer_instance = get_shell.host_computer
+    end if 
+
+    processes = computer_instance.show_procs 
+    process_arr = processes.split(c10)
+    result_arr = ["USER PID CPU MEM PROC".color("black")]
+    process_arr = []
+
+    for line in process_arr
+        line_arr = line.split(" ")
+        process_arr.push([line_list[-1], line_list[1]])
+        pretty_line = (line_list[:-1].join(" ").color("black black purple") + " " + b + line_list[-1].color("purple"))
+        result_arr.push(pretty_line)
+    end for 
+    result_arr.format_columns()
+    add_line
+
+    return _callback.catch(process_arr, 1)
+end function 
+
+command.ifconfig = function(PARAMS)
+    init = function()
+        flag_token_arr = Params.extract_flags(PARAMS)
+        if flag_token_arr.len then 
+            for flag_token in flag_token_arr 
+                flag_token_value = flag_token.value 
+                if tp(["help", "h"].indexOf(flag_token_value.values.clean("-").join(""))) == "number" then 
+                    Usage.display("ifconfig", Usage.get_usage_object("ifconfig"))
+                    return _callback.catch("", 0) 
+                end if 
+            end for   
+        end if 
+
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    if Session.process.is_connected() then 
+        router_instance = get_router(Session.machine.ip.get_pub()) 
+        computer_instance = Session.borrow("computer", Session.machine.ip.get_lan())
+        if not tp(computer_instance) == "computer" then return _callback.catch(("[blbx][ifconfig][err]: no computer objects from machine '" + Session.machine.ip.get_lan() + "' stored..."))
+    else 
+        router_insance = get_router
+        computer_instance = get_shell.host_computer
+    end if 
+
+    lan_address = computer_instance.local_ip
+    ip_address = computer_instance.public_ip
+    gate_way = computer_instance.network_gateway 
+    output = ""
+    
+    if computer_instance.active_net_card == "WIFI" then 
+        output = output + b + ("wifi connection @ '".c("black black white") + router_insance.essid_name.color("purple") + "'")
+    else 
+        output = output + b + ("ethernet connection...".c("black"))
+    end if 
+
+    output = output + c10 + b + bar(30)
+    output = output + c10 + b + "public ip: ".c("black") + ip_address.c("purple")
+    output = output + c10 + b + "local ip: ".c("black") + lan_address.c("purple")
+    output = output + c10 + b + "gateway: ".c("black") + gate_way.c("purple")
+    
+    print output+c10+c0
+    
+    result = fif(Session.process.is_connected(), [Session.machine.ip.get_pub(), Session.machine.ip.get_lan()], [get_shell.host_computer.public_ip, get_shell.host_computer.local_ip])
+    return _callback.catch(result, 1)
+end function 
+command.ifc = @command.ifconfig
+
+
+
+// command.ps = function(PARAMS)
+//     init = function()
+
+//         return _callback.catch("", 1)
+//     end function 
+//     error_handling = init()
+//     if not error_handling.status then return error_handling
+
+//     _callback.catch("", 1)
+// end function 
+
 
 // linux

@@ -40,9 +40,9 @@ display=function(input_list)
 end function
 
 //wisp=c("p")+"•"+c("w")+st+"   "+est+c("p")+"•"
-wisp=c("p")+"•"+c("w")+st+" "+est+c("p")+"•"
+wisp=c("p")+"•"+c("w")+" "+c("p")+"•"
 reveal=function(str, onCondition=0, elseShow="");if onCondition then return str;return elseShow;end function
-box=function(str, opt=0, opt2=0);return c("b")+b+"["+reveal(u, (not opt), " ")+c("p")+str+c("b")+reveal(u2, (not opt), " ")+"]";end function
+box=function(str, opt=0, opt2=0);return c("b")+b+"("+reveal(u, (not opt), " ")+c("p")+str+c("b")+reveal(u2, (not opt), " ")+")";end function
 next=c10+s(17)
 add_line=function();print c0;end function
 
@@ -120,7 +120,7 @@ failed=function(add=1)
 end function
 
 logo=function()
-  return b+(a+s(50)+"black".color("black")+"box".color("purple"))+c10
+  return b + (a + s(50) + "black".color("black") + "box".color("purple")) + c10
 end function
 
 show_prompt=function(im, il, add=1)

@@ -61,7 +61,7 @@ PasswordGenerator.AllPasswords=function()
       self.r(string.len,string[i:i+3],r)
     end for
   end for
-  sub=[];final=[];final2=[]
+  sub=[];final={};final2=[]
   for s in r.indexes
     //if sub.indexes.len == 3 then ;o=o+sub;sub={}; end if
     s=inputClean(s)
@@ -81,10 +81,20 @@ PasswordGenerator.AllPasswords=function()
 
     sub.push(s)
     sub.push(s.lower)
+
     str_len=str(sub.len)
-    if str_len.len > 3 and str_len[-3:].search("000") then ;final.push(sub);final2=final2+sub;sub=[];continue;end if
+    if str_len.len > 3 and str_len[-3:].search("000") then 
+      final[md5(s)] = s
+      final[md5(s.lower)] = s.lower
+      continue
+    end if
   end for
 
+  print
+  print 
+  print "dict: "+ final 
+  print 
+  print 
   return final
 end function
 

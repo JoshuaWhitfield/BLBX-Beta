@@ -1,0 +1,71 @@
+string.color=function(string_split_by_space="black black black");list=string_split_by_space.split(" ")
+  if not string_split_by_space.len then string_split_by_space="black black black"
+  colorm={"black":"<#707070>", "white":"<#BEB9E7FF>", "purple":"<#7A53F6>", "pink":"<#ED2EEA>", "red":"<color=red>", "dark_red":"<#731313>", "blue":"<color=blue>", "green":"<#2BB930>", "dark_green":"<#2C6407>", "cyan":"<#32E3EF>", "yellow":"<#D2DE0F>", "brown":"<#674D06>", "orange":"<#EA9512>"}
+  alpha="qwertyuiopasdfghjklzxcvbnm";number="1234567890";symbol="!@#$%^&*()_+-={}|[]\:;'<>?,./"+""""
+  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function
+  if not check_all() then return false
+  while list.len < 3;list.push(list[-1]);end while
+  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="alpha";newl=[];fp=1//;count=-1
+  for char in self.values
+    is_a=(tp(alpha.indexOf(char.lower)) == "number");is_n=(tp(number.indexOf(char)) == "number");is_s=(tp(symbol.indexOf(char)) == "number")
+    if char==c10 then ;newl.push(char+curr_color);continue;end if
+    if is_a then curr_type="alpha";if is_n then curr_type="number";if is_s then curr_type="symbol"
+    if curr_type=="alpha" then
+      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=coa;continue
+    end if
+    if curr_type=="number" then
+      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=con;continue
+    end if
+    if curr_type=="symbol" then
+      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=cos;continue
+    end if
+    newl.push(char)
+  end for
+  
+  self=newl.join("");ctr=0
+  for i in self
+    if i == "<" then ctr=ctr+1
+  end for
+  for i in range(1,ctr)
+    self=self+"</color>"
+  end for
+  return self
+end function
+string.c = @string.color
+string.search = function(sub_string = "")
+  return tp(self.lower.indexOf(sub_string.lower)) == "number";
+end function
+
+incoming_data = get_custom_object().data
+_callback = @incoming_data._callback
+
+scan_network = function()
+    local_router = get_router 
+    lan_address_arr = get_router.devices_lan_ip
+    router_addresses = []
+    count = 0
+
+    for lan_address in lan_address_arr 
+        if lan_address.split("\.")[-1] == "1" then 
+            router_addresses.push(lan_address)
+            count = count + 1
+            continue
+        end if 
+    end for 
+    
+    print 
+    print "<b>" + "network devices: " + "</b>"
+    print 
+    print "<b>" + lan_address_arr[:-count].join(char(10) + "<b>")
+    print 
+    print "<b>" + "nearby routers: " + "</b>"
+    print 
+    print "<b>" + router_addresses.join(char(10) + "<b>")
+    print
+
+    return _callback.catch({"network_devices": lan_address_arr[:-count], "routers": router_addresses}, 1)
+end function 
+return scan_network()

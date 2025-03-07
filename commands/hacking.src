@@ -1,11 +1,619 @@
-command.recon = function(PARAMS) 
+command.sweep = function(PARAMS)
+    config = {"amount": 1, "ports": [], "rhost": 0}
+    init = function()
+        // sweep <target amount> OPTION: -port[<port_number>, ...]
+        if not PARAMS.len then 
+            Usage.display("sweep", Usage.get_usage_object("sweep"))
+            return _callback.catch("", 0)
+        end if 
 
+        target_amount = Params.extract_type(PARAMS, [TokenTypes.Float])
+        if not target_amount then target_amount = "1" else target_amount = target_amount[0].value
+
+        target_ports = Params.extract_flags(PARAMS)
+        if target_ports.len then 
+            for flag in target_ports
+                flag = flag + " "
+                if flag.is_match("\[*\]") then 
+                    flag = slice(flag, flag.values.indexOf("["), flag.values.indexOf("]") + 1)
+                    target_ports = Params.extract_flag_content(flag)
+                end if
+            end for
+        end if
+        if not target_ports then target_ports = []
+
+        config.amount = target_amount 
+        config.ports = target_ports
+
+        return _callback.catch("", 1)
+    end function
+    error_handling = init()
+    if not error_handling.status then return error_handling
+    
+    count = 0
+    matching_ip_address_arr = []
+
+    while count < config.amount.to_int
+        config.rhost = Session.machine.ip.random_ip()
+        target_ports = Exploit.module.grab_ports(config.rhost, config.ports, fif(config.ports.len, 0, 1))
+
+        if not target_ports or not target_ports.len then continue 
+
+        found = [] 
+        for port in target_ports 
+            for check_port in config.ports 
+                if check_port.to_int == port.port_number then found.push(port)
+            end for 
+        end for 
+        
+        if not found.len == config.ports.len then continue 
+        
+        matching_ip_address_arr.push(config.rhost)
+        Interpreter.handle_piping(("nmap " + config.rhost), 1)
+        count = count + 1
+    end while 
+
+
+
+    return _callback.catch(matching_ip_address_arr, 1)
+end function
+command.sw = @command.sweep
+
+command.attack = function(PARAMS, data = 0) //attack ip_address port_number -scan -cgp -fw
+    config = {"rhost": "", "lan_address": "", "scan": 0, "change_password": 0, "fire_wall": 0, "ports": [], "attack_router": 0, "third_arg": "1234"}
+    init = function()
+        if not PARAMS.len then
+            Usage.display("attack", Usage.get_usage_object("attack"))
+            return _callback.catch("", 1)
+        end if 
+
+        config.rhost = Params.extract_type(PARAMS[:1], [TokenTypes.Float, TokenTypes.String])
+        if not config.rhost then return _callback.catch("[blbx][attack][err]: must enter a valid ip address...")
+        config.rhost = config.rhost[0].value
+        if not is_valid_ip(config.rhost) then return _callback.catch("[blbx][attack][err]: invalid public ip address...")
+        
+        flags_arr = Params.extract_flags(PARAMS[1:])
+
+        if flags_arr.len then 
+            for flag in flags_arr
+                flag = flag.value
+                if tp(["scan", "s"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then config.scan = 1
+                if tp(["cgp", "c"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then config.change_password = 1
+                if tp(["fw", "f"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then config.fire_wall = 1
+                if tp(["router", "r"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then 
+                    if not tp(Exploit.module.library.get_metax()) == "MetaxploitLib" then return _callback.catch("[blbx][attack][err]: 'metaxploit.so' library not found from local machine...")
+                    Exploit.set_net_session(Exploit.module.library.get_metax().net_use(config.rhost))
+                    config.attack_router = 1
+                end if
+                flag = flag + " "
+                if flag.is_match("\[*\]") then 
+                    if tp(["port", "p"].indexOf(slice(flag.values.clean("-"), 0, flag.values.clean("-").indexOf("[")).join(""))) == "number" then 
+                        flag = slice(flag, flag.values.indexOf("["), flag.values.indexOf("]") + 1)
+                        config.ports = Params.extract_flag_content(flag)
+                    end if
+                    if tp(["bounce", "b"].indexOf(slice(flag.values.clean("-"), 0, flag.values.clean("-").indexOf("[")).join(""))) == "number" then 
+                        if flag.is_match("\[*\]") then config.third_arg = flag.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:][0]
+                    end if
+                end if
+            end for
+        end if
+
+        return _callback.catch("", 1)
+    end function
+
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    handle_bool_flags = function()
+        return fif((config.change_password), 1, fif((config.fire_wall), 1, 0))
+    end function
+
+    if config.attack_router then 
+        Session.machine.ip.add_pub_address(config.rhost)
+        config.lan_address = get_router(config.rhost).local_ip
+        
+        Interpreter.handle_piping(("nmap " + config.rhost), 1)
+        success = false
+        attack_result = Exploit.attack(config.lan_address, handle_bool_flags(), config.third_arg)
+        if not attack_result.status then 
+            print            
+            printb(attack_result.data.c("black black purple"))
+            print
+            return _callback.catch("", 0)
+        end if 
+
+        success = true 
+        
+        if success then Interpreter.handle_piping("show", 0)
+
+        return _callback.catch("", 1)
+    end if 
+    _callback.debug(config.third_arg, "<color=red>hacking", 131)
+
+    attack_ports = Exploit.module.grab_ports(config.rhost, config.ports, fif(config.ports.len, 0, 1))
+    if not attack_ports then return _callback.catch("[blbx][attack][err]: ip address '"+config.rhost+"' is not reachable...")
+
+    success = false
+
+    for port in attack_ports
+        if port.is_closed then continue 
+        if not Exploit.module.library.get_metax() then return _callback.catch("[blbx][attack][err]: 'metaxploit.so' library not found on local machine... ")
+        Exploit.set_net_session(Exploit.module.get_local_lib("metaxploit.so").net_use(config.rhost, port.port_number))
+        if not tp(Exploit.get_net_session()) == "NetSession" then 
+            printb("[blbx][attack][warning]: net-session failed to start...".c("black black purple"))
+            continue
+        end if 
+        config.lan_address = port.get_lan_ip 
+
+        Session.machine.ip.add_pub_address(config.rhost)
+        Exploit.set_scan_mode(config.scan)
+        attack_result = Exploit.attack(config.lan_address, handle_bool_flags(), config.third_arg)
+        
+        if not attack_result.status then 
+            print            
+            printb(attack_result.data.c("black black purple"))
+            print
+            continue
+        end if 
+
+        success = true
+    end for 
+
+    if success then Interpreter.handle_piping("show", 0)
+
+    return _callback.catch("", 1)
+end function 
+command["atk"] = @command.attack
+
+command.connect = function(PARAMS)
+    config = {"lan_address": 0, "as_user": 0}
+    init = function()
+        if not PARAMS.len then 
+            Usage.display("connect", Usage.get_usage_object("connect"))
+            return _callback.catch("", 0)
+        end if 
+
+        lan_address = Params.extract_type(PARAMS, [TokenTypes.Float])
+        username = Params.extract_type(PARAMS, [TokenTypes.String, TokenTypes.Argument])
+        if not lan_address then return _callback.catch("[blbx][connect][err]: must include a lan address argument...")
+        lan_address = lan_address[0]
+        if not is_lan_ip(lan_address.value) then return _callback.catch("[blbx][connect][err]: invalid lan address '" + lan_address.value + "'...")
+        if not Exploit.device.has(lan_address.value) then return _callback.catch("[blbx][connect][err]: device map does not contain lan address '" + lan_address.value + "'...")
+        config.lan_address = lan_address.value
+
+        username_arr = Exploit.device.user_map[config.lan_address]
+
+        if username then 
+            username = username[0].value
+            found_user = false
+            for user in username_arr 
+                if user.lower.search(username) then 
+                    found_user = user
+                    break 
+                end if 
+            end for
+            if not found_user then return _callback.catch("[blbx][connect][err]: username not found in device '" + config.lan_address + "'...")
+            config.as_user = found_user
+        else 
+            if tp(username_arr.indexOf("root")) == "number" then config.as_user = "root"
+            if username_arr.len and (tp(username_arr.indexOf("root")) != "number" and tp(username_arr.indexOf("guest")) != "number") then config.as_user = username_arr[0]
+            if tp(username_arr.indexOf("guest")) == "number" then config.username = "guest"
+        end if
+        
+        if not config.as_user then return _callback.catch("[blbx][connect][err]: username not found in device '" + config.lan_address + "'...")
+
+        return _callback.catch("", 1)
+    end function
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    Exploit.device.set_current(Exploit.device.get(config.lan_address))
+    Prompt.set_username(config.as_user)
+    Prompt.set_ip_address(hide_ip(Session.machine.ip.get_pub()))
+    Prompt.set_lan_address(hide_ip(config.lan_address))
+    Session.machine.ip.set_lan(config.lan_address)
+    Session.machine.user.set_name(config.as_user)
+    Session.process.set_connected(true)
+
+    success
+
+    return _callback.catch("", 1)
+end function 
+command.c = @command.connect
+
+command.disconnect = function(PARAMS)
+    config = {"lan_address": 0}
+    init = function()
+        flags_arr = Params.extract_flags(PARAMS)
+
+        for flag_token in flags_arr 
+            if tp(["help", "h"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then
+                Usage.display("disconnect", Usage.get_usage_object("disconnect"))
+                return _callback.catch("", 0)
+            end if 
+        end for 
+
+        return _callback.catch("", 1)
+    end function
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    Session.machine.user.wipe()
+    Session.machine.user.set_name("blbx")
+    Prompt.set_username("blbx")
+    Session.machine.ip.set_lan("")
+    Prompt.set_ip_address("local")
+    Session.process.set_connected(false)
+
+    success 
+
+    return _callback.catch("", 1)
+end function 
+command.dc = @command.disconnect 
+
+command.wipe = function(PARAMS)
+    init = function()
+        flags_arr = Params.extract_flags(PARAMS)
+
+        for flag_token in flags_arr 
+            if tp(["help", "h"].indexOf(flag.values.clean(["-"]).join("").lower)) == "number" then
+                Usage.display("disconnect", Usage.get_usage_object("disconnect"))
+                return _callback.catch("", 0)
+            end if 
+        end for 
+
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    Session.wipe()
+    Exploit.device.wipe()
+    Interpreter.handle_piping("disconnect", 0)
+
+    return _callback.catch("", 1)
 end function 
 
-command.attack = function(PARAMS)
+command.rat = function(PARAMS)
+    config = {"scan_nw": 0, "rshell": 0, "dict": 0, "bounce": 0, "escalate": 0}
+    bounce = {"library_name": "aptclient.so", "lan_address": 0}
+    escalate = {"username": "root", "password": false, "use_dict": 0, "dictionary": Session.db.parse("dictionary")}
+    init = function()
+        if not Session.process.is_connected() then return _callback.catch("[blbx][rat][err]: must [connect] to a target to use [rat] exploit...")
+        
+        if not PARAMS.len > 0 then 
+            Usage.display("rat", Usage.get_usage_object("rat"))
+            return _callback.catch("", 0)
+        end if 
 
+        flag_tokens = Params.extract_type(PARAMS, [TokenTypes.Flag])
+        if not flag_tokens then 
+            Usage.display("rat", Usage.get_usage_object("rat"))
+            return _callback.catch("", 0)
+        end if 
+        
+        for flag_token in flag_tokens 
+            if tp(["scan_nw", "snw"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.scan_nw = 1
+            if tp(["rshell", "rsh"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.rshell = 1
+            if tp(["dict", "d"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.dict = 1
+            flag_token = flag_token.value
+            if flag_token.is_match("\[") and flag_token.is_match("\]") then 
+                flag_token = flag_token.split(", ")
+                if not flag_token.len > 1 then
+                    Usage.display("rat", Usage.get_usage_object("rat"))
+                    return _callback.catch("", 0)
+                end if
+                flag_token = flag_token.join(",")
+                if tp(["escalate", "esc"].indexOf(slice(flag_token.values.clean("-"), 0, flag_token.values.clean("-").indexOf("[")).join(""))) == "number" then 
+                    if flag_token.is_match("\[") and flag_token.is_match("]") then 
+                        if not flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:].len > 1 then 
+                            Usage.display("rat", Usage.get_usage_object("rat"))
+                            return _callback.catch("", 0)
+                        end if 
+
+                        config.escalate = 1
+                        captured_flag = flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:]
+                        if captured_flag.hasIndex(0) then escalate.username = captured_flag[0]
+                        if captured_flag.hasIndex(1) then escalate.password = captured_flag[1]
+                        if not escalate.password then escalate.use_dict = 1
+
+                        escalate.username = captured_flag[0]
+                        escalate.password = captured_flag[1]
+                    end if 
+                end if 
+                if tp(["bounce", "b"].indexOf(slice(flag_token.values.clean("-"), 0, flag_token.values.clean("-").indexOf("[")).join(""))) == "number" then 
+                    if flag_token.is_match("\[") and flag_token.is_match("\]") then
+                        if not flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:].len > 1 then 
+                            Usage.display("rat", Usage.get_usage_object("rat"))
+                            return _callback.catch("", 0)
+                        end if
+                        
+                        config.bounce = 1
+                        bounce.lan_address = flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:][0]
+                        bounce.library_name = flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:][1]
+
+                        if not is_lan_ip(bounce.lan_address) then return _callback.catch("[blbx][rat][err]: lan address '" + bounce.lan_address + "' is invalid...")
+    
+                        available_libs = ["aptclient.so", "kernel_router.so", "kernel_module.so", "net.so", "init.so", "crypto.so", "librshell", "libhttp.so", "libssh.so", "libftp.so", "libsmtp.so", "libsql.so", "librepository.so", "libtrafficnet.so", "libabd.so"]
+                        found = false
+                        for library_name in available_libs
+                            if library_name.lower.search(bounce.library_name.lower) then 
+                                bounce.library_name = library_name
+                                found = true
+                                break 
+                            end if
+                        end for 
+                        if not found then return _callback.catch("[blbx][rat][err]: library '" + bounce.library_name + "' not found...")
+                    end if 
+                end if
+            end if
+        end for 
+
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+    
+    handle = {}
+    handle["scan_nw"] = function()
+        init = function()
+            shell_instance = fif(Session.process.is_connected(), Session.borrow("shell", Session.machine.ip.get_lan()), get_shell)
+            try_send_data = Exploit.module.malware.send(shell_instance, "blbx_scan_nw.src", "", Session.rpc.src.scan_nw(), {"_callback": _callback})
+            return try_send_data
+        end function 
+        error_handling = init()
+        if not error_handling.status then return error_handling
+
+        data_catch = Exploit.module.malware.catch().data
+
+        return _callback.catch(data_catch, 1)
+    end function 
+
+    handle["rshell"] = function()
+        init = function()
+            shell_instance = fif(Session.process.is_connected(), Session.borrow("shell", Session.machine.ip.get_lan()), get_shell)
+            try_send_data = Exploit.module.malware.send(shell_instance, "blbx_rshell.src", "", Session.rpc.src.rshell(), {"_callback": _callback, "Directory": Directory, "host_ip_address": get_shell.host_computer.public_ip})
+            return try_send_data
+        end function 
+        error_handling = init()
+        if not error_handling.status then return error_handling
+
+        data_catch = Exploit.module.malware.catch()
+        if data_catch.data.hasIndex("rshell") then 
+            rshell = data_catch.data.rshell //yeah i know what the hell 
+        
+            Session.allocate(rshell, rshell.host_computer.local_ip)
+            Exploit.device.add(rshell, rshell.host_computer.local_ip)
+            printb("*** reverse shell connection from '" + rshell.host_computer.local_ip + "' intercepted ***")
+        else 
+            printb("*** please start a rshell port forward at the router on '" + get_shell.host_computer.public_ip + "' ***")
+        end if
+        return _callback.catch(data_catch.data.data.rshell, 1)
+    end function 
+
+    handle["bounce"] = function()
+        config = {"metax": 0}
+        shell_instance = fif(Session.process.is_connected(), Session.borrow("shell", Session.machine.ip.get_lan()), get_shell)
+        if not tp(shell_instance) == "shell" then return _callback.catch("[blbx][rat][err]: shell objects from remote target not stored...")
+        file_instance = shell_instance.host_computer.File("/")
+
+        try_remote_library = function(bounce)
+            return Directory.find_file(file_instance, 0, bounce.library_name)
+        end function
+
+        adding_library = false
+        adding_metax = false
+        
+        init = function(bounce)
+            if not config.metax then 
+                adding_metax = true
+                printb("*** 'metaxploit.so' library missing on target machine ***".c("purple"))
+                printb("planting...".c("purple"))
+
+                local_metax_lib = Directory.find_file(get_shell.host_computer.File("/"), 0, "metaxploit.so")
+                if not tp(local_metax_lib) == "file" then return _callback.catch("[blbx][rat][err]: metaxploit library not found on local machine...")
+
+                access_dir = Session.rpc.get_access(file_instance)
+                if not tp(access_dir) == "file" then return _callback.catch("[blbx][rat][err]: no vulnerable directory available on remote target...") 
+
+                print 
+                printb(("vulnerable directory found '" + access_dir.path + "'").c("purple"))
+                try_send_metax = get_shell.scp(local_metax_lib.path, access_dir.path, shell_instance)
+                if tp(try_send_metax) == "string" then return _callback.catch(("[blbx][rat][err]: " + try_send_metax))
+                config.metax = Directory.find_file(file_instance, 0, "metaxploit.so")
+            end if
+            if not tp(try_remote_library(bounce)) == "file" then 
+                adding_library = true
+                printb("*** '" + bounce.library_name + "' library missing on target machine ***".c("purple"))
+                printb("planting...".c("purple"))
+                local_library_file = Directory.find_file(get_shell.host_computer.File("/"), 0, bounce.library_name)
+    
+                if not tp(local_library_file) == "file" then return _callback.catch("[blbx][rat][err]: library '" + bounce.library_name + "' not found on local machine. cannot plant for exploitation....")
+
+                access_dir = Session.rpc.get_access(file_instance)
+                if not tp(access_dir) == "file" then return _callback.catch("[blbx][rat][err]: no vulnerable directory available on remote target...") 
+
+                print 
+                printb("vulnerable directory found '" + access_dir.path + "'")
+                try_send_local_library = get_shell.scp(local_library_file.path, access_dir.path, shell_instance)
+                if tp(try_send_local_library) == "string" then return _callback.catch(("[blbx][rat][err]: " + try_send_metax))
+            end if 
+            incoming_data = {"_callback": _callback, "Directory": Directory, "Exploit": Exploit, "string": string, "Session": Session, "library_path": Directory.find_file(file_instance, 0, bounce.library_name).path, "lan_address": bounce.lan_address, "database": Session.db.parse("exploit"), "notify": @notify, "hide_ip": @hide_ip}
+            
+            try_send_data = Exploit.module.malware.send(shell_instance, "blbx_bounce.src", "", Session.rpc.src.bounce(), incoming_data)
+            return try_send_data
+        end function 
+        error_handling = init(bounce)
+        if not error_handling.status then return error_handling
+
+        Session.machine.ip.add_lan_address(bounce.lan_address)
+
+        data_catch = Exploit.module.malware.catch().data.data
+
+        if not data_catch.hasIndex("Session") then return _callback.catch(data_catch.data)
+
+        Session = @data_catch.Session 
+        Exploit = @data_catch.Exploit
+        exploit_arr = @data_catch.exploit_arr
+        library = @data_catch.library
+
+        for exploit in exploit_arr
+            Exploit.module.add_exploit(exploit, library, Session.db.parse("exploit"), 1)
+        end for 
+
+        if adding_metax and tp(config.metax) == "file" then config.metax.delete
+        if adding_library then 
+            if tp(try_remote_library(bounce)) == "file" then try_remote_library(bounce).delete
+        end if 
+
+        Interpreter.handle_piping("show", 0)
+
+        return _callback.catch(exploit_arr, 1)
+    end function
+
+    handle["escalate"] = function()
+        init = function()
+            
+        end function 
+    end function 
+
+    return_data = []
+
+    for func_name in config.indexes
+        if config[func_name] then 
+            func_syntax_proxy = @handle[func_name]
+            func_proxy_result = func_syntax_proxy()
+            return_data.push(func_proxy_result)
+        end if 
+    end for 
+
+    if not return_data.len then return _callback.catch("", 1)
+    if not return_data[0].status then return return_data[0]
+
+    return _callback.catch("", 1)
+end function  
+
+
+
+command.rshells = function(PARAMS)
+    init = function()
+        flag_token_arr = Params.extract_flags(PARAMS)
+        if flag_token_arr.len then 
+            for flag_token in flag_token_arr 
+                flag_token_value = flag_token.value 
+                if tp(["help", "h"].indexOf(flag_token_value.values.clean("-").join(""))) == "number" then 
+                    Usage.display("rshells", Usage.get_usage_object("rshells"))
+                    return _callback.catch("", 0) 
+                end if 
+            end for   
+        end if 
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    print Exploit.module.get_local_lib("metaxploit.so").rshell_server
+
+    return _callback.catch("", 1)
+end function 
+command.rsh = @command.rshells
+
+command.start = function(PARAMS)
+    shell_instance = Session.borrow("shell", Session.machine.ip.get_lan())
+    init = function()
+        flag_token_arr = Params.extract_flags(PARAMS)
+        if flag_token_arr.len then 
+            for flag_token in flag_token_arr 
+                flag_token_value = flag_token.value 
+                if tp(["help", "h"].indexOf(flag_token_value.values.clean("-").join(""))) == "number" then 
+                    Usage.display("start", Usage.get_usage_object("start"))
+                    return _callback.catch("", 0) 
+                end if 
+            end for   
+        end if 
+        
+        if not Session.process.is_connected() then return _callback.catch("[blbx][start][err]: must use [connect] to start a remote terminal...")
+        if not tp(shell_instance) == "shell" then return _callback.catch("[blbx][start][err]: no shell objects stored on machine '" + Session.machine.ip.get_lan() + "'...")
+        
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    shell_instance.start_terminal()
+    return _callback.catch("", 1)
 end function 
 
-command.obtain = function(PARAMS)
+command.logs = function(PARAMS)
+    init = function()
+        flag_token_arr = Params.extract_flags(PARAMS)
+        if flag_token_arr.len then 
+            for flag_token in flag_token_arr 
+                flag_token_value = flag_token.value 
+                if tp(["help", "h"].indexOf(flag_token_value.values.clean("-").join(""))) == "number" then 
+                    Usage.display("logs", Usage.get_usage_object("logs"))
+                    return _callback.catch("", 0) 
+                end if 
+            end for   
+        end if 
 
+        if not Session.process.is_connected() then return _callback.catch("[blbx][logs][err]: must use [connect] to remove logs from a remote target...")
+        
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    try_clear_logs = Exploit.module.clear_logs()
+    if not try_clear_logs then return _callback.catch("[blbx][logs][err]: logs file '/var/system.log' not found...")
+    if tp(try_clear_logs) == "string" and not try_clear_logs.search("corrupted") then return _callback.catch("[blbx][logs][notif]: "+ try_clear_logs)
+    
+    add_line
+    printb(try_clear_logs.c("black"))
+    add_line 
+    
+    return _callback.catch("", 1)
 end function 
+
+
+
+command.dia = function(PARAMS)
+    config = {"ssh_ip": 0, "ssh_passwd": 0, "rhost": 0, "flag": 0, "target_amount": 1}
+    init = function()
+        if not PARAMS.len then 
+            Usage.display("dia", Usage.get_usage_object("dia"))
+            return _callback.catch("", 0)
+        end if 
+
+        token_string = Params.extract_type(PARAMS, [TokenTypes.String])
+        if token_string then 
+            string_value = token_string[0].value
+            ssh_components = string_value.split(" ")
+            if not ssh_components.len > 1 then
+                Usage.display("dia", Usage.get_usage_object("dia"))
+                return _callback.catch("", 0)
+            end if   
+
+            config.ssh_ip = ssh_components[0]
+            config.ssh_passwd = ssh_components[1]
+
+            return _callback.catch("", 1)
+        end if 
+
+        flag_token = Params.extract_type(PARAMS, [TokenTypes.Flag])[0]
+        if not flag_token then 
+            Usage.display("dia", Usage.get_usage_object("dia"))
+            return _callback.catch("", 0)
+        end if 
+        if tp(["port", "p"].indexOf(flag_token.value.values.clean(["-"].join("")))) == "number" then config.flag = flag_token.value
+
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+
+    return _callback.catch("", 1)
+end function 
+
+// hacking

@@ -1,0 +1,17 @@
+incoming_data = get_custom_object().data 
+_callback = @incoming_data._callback
+username = incoming_data.username
+dictionary = incoming_data.dictionary
+dictionary_attack = function(_user, _dict)
+    found = false 
+    for password in _dict.values 
+        try_shell_login = get_shell(_user, password)
+        if typeof(try_shell_login) == "null" then continue 
+        found = password
+        break
+    end for 
+    if not found then return _callback.catch("[blbx][dict][err]: dictionary attack failed. password not found...", 0)  
+    print "<b>password found: " + found + "</b>"
+    return _callback.catch(found, 1)
+end function 
+return dictionary_attack(username, dictionary)

@@ -1,0 +1,24 @@
+incoming_object = get_custom_object()
+incoming_data = incoming_object.data 
+
+_callback = @incoming_data._callback
+
+string.search = function(sub_string = "")
+  return tp(self.lower.indexOf(sub_string.lower)) == "number";
+end function
+
+tp = @typeof
+
+Directory = @incoming_data.Directory
+host_ip_address = incoming_data.host_ip_address
+send_reverse_shell_instance = function(reverse_shell_host_ip)
+    target_library_file = Directory.find_file(get_shell.host_computer.File("/"), 0, "metaxploit.so")
+    if not target_library_file then return _callback.catch("[blbx][rshell][err]: cannot find metaxploit.so on machine...")
+    metaxploit = include_lib(target_library_file.path)
+    try_rshell_client = metaxploit.rshell_client(reverse_shell_host_ip, 1222, c0)
+    if tp(try_rshell_client) == "string" then return _callback.catch("[blbx][rshell][err]: " + try_rshell_client)
+    return _callback.catch(try_rshell_client, 1)
+end function 
+result = send_reverse_shell_instance(host_ip_address).data
+incoming_object.data = {"rshell": result}
+return incoming_object

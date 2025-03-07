@@ -42,7 +42,7 @@ end function
 
 // Strings
 string.search = function(sub_string = "")
-    return tp(self.lower.indexOf(sub_string.lower)) == "number";
+  return tp(self.lower.indexOf(sub_string.lower)) == "number";
 end function
 
 string.has = function(sub_string = "")
@@ -280,6 +280,14 @@ list.remove_repeats=function()
   return self
 end function
 
+list.reverse = function()
+  new_arr = []
+  for elem in self 
+    new_arr.push(self.pop)
+  end for 
+  return new_arr
+end function 
+
 
 //list:
 //t_list=range(0,49)
@@ -320,6 +328,15 @@ list.combine=function();newm={}
   self=newm
   return self
 end function
+
+list.mass_concat = function()
+  result = []
+  for sub_arr in self 
+    result = result + sub_arr
+  end for 
+  return result
+end function 
+
 list.copy=function();res=[];for i in self;res.push(i);end for;self=res;return self;end function
 list.clean=function(example_list)
   newl=[]
@@ -410,8 +427,47 @@ list.slice=function(start_ind, to_ind)
   if not psuedo_self.hasIndex(to_ind) and difference>1 then return null
   return slice(psuedo_self, start_ind, to_ind)
 end function
+
+list.zip = function(value_arr)
+  result = {}
+  index = -1
+  for key in self
+    index = index + 1
+    if not value_arr.hasIndex(index) then break
+    value = value_arr[index]
+    result[key] = value 
+  end for 
+
+  return result
+end function
 //map:
 //t_map={}
+
+map.groupBy = function(amount = 5000)
+  keys = self.indexes 
+  values = self.values 
+  result = []
+  sub_map = {}
+  count = -1
+  index = -1
+  for key in keys 
+    count = count + 1
+    index = index + 1
+    if count == amount-1 then
+      print result.len 
+      result.push(sub_map)
+      sub_map = {}
+      sub_map[key] = values[index]
+      count = -1
+      continue 
+    end if 
+
+    sub_map[key] = values[index]
+  end for 
+
+  return result
+end function
+
 map.add=function(key, value)
   self[key]=value
   return self

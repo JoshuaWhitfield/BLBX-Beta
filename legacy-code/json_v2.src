@@ -1,0 +1,522 @@
+string.quote = function()
+    return """" + self + """"
+end function 
+
+string.search = function(sub_string = "")
+  return typeof(self.lower.indexOf(sub_string.lower)) == "number";
+end function
+
+list.clean=function(example_list)
+  newl=[]
+  for i in self
+    if typeof(example_list.indexOf(i)) == "number" then continue
+    newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+
+list.remove_repeats=function()
+  newl=[]
+  for i in self
+    if typeof(newl.indexOf(i)) != "number" then newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+
+list.reverse = function()
+  new_arr = []
+  for elem in self 
+    new_arr.push(self.pop)
+  end for 
+  return new_arr
+end function 
+
+list.indexOfFurthest = function(look_for = false)
+    if not look_for then return null 
+    found = null 
+    index = -1
+    for element in self 
+        index = index + 1
+        if element == look_for then found = index
+    end for 
+    return found
+end function
+
+callable = function(value)
+    return typeof(value) == "function";
+end function
+
+anonSuccess = function()
+  return true
+end function
+
+anonFailure = function()
+  return true
+end function
+
+fif = function(condition, onSuccess = @anonSuccess, onFailure = @anonFailure)
+    if callable(condition) then condition = condition();
+    
+    if condition then 
+        if callable(onSuccess) then return onSuccess();
+        return onSuccess;
+    end if
+
+    if callable(onFailure) then return onFailure();
+    return onFailure();
+end function
+
+
+_json = {}
+
+_json.lexer = {}
+_json.lexer.TokenTypes = { "Key":"KEY", "List": "LIST", "Map": "MAP", "CloseMap": "CLOSEMAP", "CloseList": "CLOSELIST", "String": "STRING", "Number": "NUMBER", "Comma": "COMMA", "Undefined": "UNDEFINED" }
+_json.lexer.token_output = []
+_json.lexer.input = ""
+_json.lexer.position = 0 
+
+_json.lexer.wipe = function()
+    self.input = ""
+    self.position = 0 
+    self.token_output = []
+end function 
+
+
+_json.lexer.get_token_output = function()
+    return self.token_output
+end function 
+
+_json.lexer.set_token_output = function(new_token_output)
+    self.token_output = new_token_output 
+    return self.token_output 
+end function 
+
+_json.lexer.set_input = function(new_input)
+    self.input = new_input
+    return self.input
+end function 
+
+_json.lexer.get_input = function()
+    return self.input 
+end function 
+
+_json.lexer.consume = function()
+    result = self.get_input()[self.position]
+    self.set_input(self.get_input()[1:])
+    return result
+end function
+
+_json.lexer.peek = function()
+    if not self.get_input().hasIndex(self.position + 1) then return false 
+    return self.get_input()[self.position] 
+end function 
+
+_json.lexer.next_token = function()
+    
+    if not self.get_input().len then return null
+    // Handle keys 
+    key_regex = ("""" + "(?:\\.|[^" + """" + "\\])*" + """")
+    // () 
+    value = self.consume()
+
+    if typeof((char(10) + " ,").values.indexOf(value)) == "number" then return self.next_token()
+    if value.is_match(key_regex) then 
+        if  value[-1] == ":" then
+            //Handle Maps 
+            if value[-1] == ":" and self.peek()[0] == "{" then 
+                // clean and return key
+                self.consume()
+                return { "type": self.TokenTypes.Map, "value": value[:-1].values.clean([""""]).join("") }
+            end if 
+            //Handle Lists
+            if value[-1] == ":" and self.peek()[0] == "[" then 
+                self.consume()
+                return { "type": self.TokenTypes.List, "value": value[:-1].values.clean([""""]).join("") }
+            end if 
+            // Handle regular keys 
+            return { "type": self.TokenTypes.Key , "value": value[:-1].values.clean([""""]).join("") }
+            
+        end if 
+        
+        
+        // Handle Strings
+        keyword = value
+        return { "type": self.TokenTypes.String, "value": keyword.values.clean(["""", ","]).join("").trim }
+    end if 
+
+    // Handle Numbers 
+    if self.get_input().len and value.is_match("\d") then 
+        number = value
+        return { "type": self.TokenTypes.Number, "value": number.values.clean([",", char(10)]).join("").val }
+    end if 
+
+    //handle wild arrays 
+    if value.search("[") then return { "type": self.TokenTypes.List, "value": "literal" }
+    if value.search("]") then return { "type": self.TokenTypes.CloseList, "value": "]" }
+
+    // handle closures 
+    if value.search("{") then return { "type": self.TokenTypes.Map, "value": "literal" }
+    if value.search("}") then return { "type": self.TokenTypes.CloseMap, "value" : "}" }
+    
+    // Skipp unrecognized tokens
+    return self.next_token()
+end function 
+
+_json.lexer.tokenize = function(token_output = 0)
+    if not token_output then token_output = []
+    current_token = self.next_token()
+    if typeof(current_token) == "null" then return token_output
+
+    token_output.push(current_token)
+    return self.tokenize(token_output)
+end function
+
+
+/// ---------------------
+///----------------------
+_json.scaffold = {}
+_json.scaffold.output_array = []
+_json.scaffold.input = []
+_json.scaffold.position = 0
+
+_json.scaffold.wipe = function()
+    self.output_array = []
+    self.input = []
+    self.position = 0
+end function 
+
+_json.scaffold.get_input = function()
+    return self.input 
+end function 
+
+_json.scaffold.set_input = function(new_input)
+    self.input = new_input 
+    return self.input 
+end function
+
+_json.scaffold.peek = function(input_arr)
+    if not input_arr then input_arr = self.get_input()
+    if not input_arr.hasIndex(self.position + 1) then return false
+    return input_arr[self.position + 1]
+end function
+
+_json.scaffold.get_current = function(input_arr)
+    if not input_arr then input_arr = self.get_input()
+    if not input_arr.len then return false
+    return input_arr[self.position]
+end function 
+
+_json.scaffold.consume = function()
+    result = self.get_current()
+    if not result then 
+        return result 
+    end if 
+    self.set_input(self.get_input()[1:])
+    return result
+end function 
+
+_json.scaffold.parse_list = function(input_arr, output_array)
+    if not output_array then output_array = []
+    count = 0
+    skip = false 
+    for element in input_arr 
+        if skip then 
+            if not count then skip = false 
+            if count > 0 then count = count - 1 
+            continue 
+        end if    
+        self.consume()
+        if element.type == _json.lexer.TokenTypes.List then 
+            output_array.push(element)
+            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseList, "value": "]"}) + 1)
+            count = new_input_arr.len 
+            skip = true
+            output_array.push(self.parse_list(new_input_arr))
+            continue 
+        end if 
+
+        if element.type == _json.lexer.TokenTypes.Map then 
+            output_array.push(element)
+            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
+            count = new_input_arr.len 
+            skip = true 
+            output_array.push(self.parse_map(new_input_arr))
+            continue
+        end if 
+       
+        output_array.push(element)
+    end for 
+  
+    return output_array
+end function 
+
+_json.scaffold.parse_map = function(input_arr, output_array = 0)
+    if not output_array then output_array = []
+    skip = false 
+    count = 0
+    for element in input_arr
+        if skip then 
+            if not count then skip = false 
+            if count > 0 then count = count - 1
+            continue 
+        end if 
+        self.consume()
+        if element.type == _json.lexer.TokenTypes.Map then 
+            output_array.push(element)
+            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
+            
+            output_array.push(self.parse_map(new_input_arr))
+            count = new_input_arr.len
+            skip = true
+            continue
+        end if 
+        if element.type == _json.lexer.TokenTypes.List then 
+            new_input_arr = slice(input_arr, input_arr.indexOf(element) + 1, input_arr.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseList, "value": "]"}))
+        
+            output_array.push(element)
+            output_array.push(self.parse_list(new_input_arr))
+            count = new_input_arr.len 
+            skip = true
+            continue 
+        end if 
+        output_array.push(element)
+    end for 
+
+    return output_array
+end function
+
+_json.scaffold.parse = function(output_array = 0)
+    if not output_array then output_array = []
+    current_token = self.consume()
+    if not current_token then 
+        return output_array
+    end if
+
+    // //handle maps 
+    if current_token.type == _json.lexer.TokenTypes.Map then 
+        output_array.push(current_token)
+        new_input_arr = slice(self.get_input(), self.get_input().indexOf(current_token) + 1, self.get_input().indexOf({ "type": _json.lexer.TokenTypes.CloseMap, "value": "}" }))
+        output_array.push(self.parse_map(new_input_arr))
+        return self.parse(output_array)
+    end if 
+
+    //handle lists
+    if current_token.type == _json.lexer.TokenTypes.List then 
+        output_array.push(current_token)
+        new_input_arr = slice(self.get_input(), self.get_input().indexOf(current_token) + 1, self.get_input().indexOf({ "type": _json.lexer.TokenTypes.CloseList, "value": "]" }))
+        output_array.push(self.parse_list(new_input_arr))
+        return self.parse(output_array)
+    end if 
+
+    //handle regular values: 
+    output_array.push(current_token)
+
+    return self.parse(output_array)
+end function 
+
+
+_json.parser = {}
+_json.parser.object_output = {}
+_json.parser.position = 0
+_json.parser.input = []
+_json.parser.is_list = false 
+_json.parser.is_map = false 
+
+_json.parser.get_input = function()
+    return self.input
+end function 
+
+_json.parser.set_input = function(new_input)
+    self.input = new_input 
+    return self.input 
+end function
+
+_json.parser.get_current = function()
+    return self.input[self.position]
+end function 
+
+_json.parser.peek = function(input_arr)
+    if not input_arr.hasIndex(self.position + 1) then return false 
+    return input_arr[self.position + 1]
+end function 
+
+_json.parser.next_pair = function()
+    key_value_pair = self.consume()
+    return key_value_pair
+end function 
+
+_json.parser.has_key = function(input_arr)
+    found = false 
+
+    for element in input_arr 
+        if element.type == _json.lexer.TokenTypes.Key then 
+            found = true 
+            break 
+        end if 
+    end for 
+
+    return found 
+end function
+
+_json.parser.parse_map = function(input_arr, output_object = 0)
+    if not output_object then output_object = {}
+    index = -1
+    skip = false 
+    count = 0
+    for element in input_arr 
+        index = index + 1
+        if skip then ;skip = false;continue;end if
+        if element.type == _json.lexer.TokenTypes.Key then 
+            output_object[element.value] = input_arr[index + 1].value
+            skip = true 
+            continue 
+        end if 
+    end for 
+
+    return output_object
+end function
+
+_json.parser.parse_list = function(input_arr, output_arr = 0)
+    if not output_arr then output_arr = []  
+    index = -1
+    skip = false 
+    for element in input_arr 
+        if skip then ;skip = false;_callback.debug("<color=orange>"+element, "<color=orange>json skipping token", 414);continue;end if 
+        index = index + 1 
+        _callback.debug("<color=red>"+element, "<color=red>json token", 416)
+        if typeof(element) == "list" then
+            output_arr.push(self.parse_list(element))
+            continue 
+        end if 
+        if element.type == _json.lexer.TokenTypes.Map then 
+            output_arr.push(self.parse_map(input_arr[index + 1]))
+            skip = true
+            continue
+        end if 
+        if typeof([_json.lexer.TokenTypes.List, _json.lexer.TokenTypes.Map, _json.lexer.TokenTypes.CloseList, _json.lexer.TokenTypes.CloseMap].indexOf(element.type)) == "number" then continue
+        output_arr.push(element.value)
+    end for 
+    return output_arr
+end function 
+
+_json.parser.parse = function(input_arr = 0, object_output = 0)
+    if not input_arr then input_arr = []
+    if not object_output then object_output = {}
+    skip = false 
+    count = 0
+    count_iter = -1
+    for element in input_arr 
+        count_iter = count_iter + 1
+        if skip then 
+            if not count then skip = false 
+            if count >= 0 then count = count - 1
+            continue
+        end if 
+        
+        if element.type == _json.lexer.TokenTypes.Key then 
+            object_output[element.value] = self.peek(input_arr).value
+            skip = true 
+            count = 0
+            continue 
+        end if 
+
+        if element.type == _json.lexer.TokenTypes.Map then 
+            object_output[element.value] = self.parse(self.peek(input_arr[count_iter:]))
+            skip = true 
+            count = 0
+            continue
+        end if 
+
+        if element.type == _json.lexer.TokenTypes.List then 
+            object_output[element.value] = self.parse_list(self.peek(input_arr[count_iter:]))
+            skip = true 
+            count = 0
+            continue
+        end if 
+    end for 
+    return object_output
+end function
+
+JSON = {}
+JSON.internal = _json
+
+JSON.write = function(map_object = {}, indentation = 2, jump = 2)
+    if not map_object.len then return "{}"
+    if not typeof(["map", "list"].indexOf(typeof(map_object))) == "number" then return false 
+
+    open_bracket = fif(typeof(map_object) == "map", "{", "[")
+    closed_bracket = fif(typeof(map_object) == "map", "}", "]")
+    space = " " * indentation
+    result = open_bracket
+
+    if typeof(map_object) == "list" then 
+        for element in map_object 
+            if typeof(element) == "map" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + self.write(element, (indentation + jump))
+                continue 
+            end if 
+            if typeof(element) == "list" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + self.write(element, (indentation + jump))
+                continue 
+            end if 
+            if typeof(element) == "string" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + element.quote
+                continue 
+            end if 
+            if typeof(element) == "number" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + element
+                continue 
+            end if
+            if typeof(element) == "function" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + "Function()"
+                continue 
+            end if
+        end for 
+        result = result + char(10) + (" " * (indentation - jump)) + "],"
+        return result
+    end if 
+
+    for element in map_object
+        key = element.key 
+        value = element.value 
+        if typeof(value) == "map" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + self.write(value, (indentation + jump))
+            continue 
+        end if 
+        if typeof(value) == "list" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + self.write(value, (indentation + jump))
+            continue 
+        end if 
+        if typeof(value) == "string" then
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + value.quote
+            continue 
+        end if 
+        if typeof(value) == "number" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + value
+            continue 
+        end if 
+        if typeof(value) == "function" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": Function()"
+            continue 
+        end if 
+    end for 
+
+    result = result + char(10) + (" " * (indentation - jump)) + "}"
+
+    return result 
+end function 
+
+stringify = JSON.write({"hello": "world", "number": 1234, "map": {"number2": "5678", "list": [1, 2, 3, ["sub_arr"]]}, "list2": ["1234", 5678, {"sub": "map"}]})
+JSON.read = function(serialized_object = "{" + char(10) + "}") 
+    if typeof(["{" + char(10) + "}", "{}"].indexOf(serialized_object)) == "number" then return {}
+    self.internal.lexer.set_input(serialized_object.split(" ").clean([""]))
+    tokens = self.internal.lexer.tokenize()
+    self.internal.scaffold.set_input(tokens[1:])
+    scaffold = self.internal.scaffold.parse(self.internal.scaffold.output_array)
+
+    return self.internal.parser.parse(scaffold) 
+end function 
+
+

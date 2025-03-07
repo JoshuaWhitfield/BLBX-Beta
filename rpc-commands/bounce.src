@@ -1,0 +1,101 @@
+c10 = char(10)
+c0 = char(0)
+incoming_object = get_custom_object()
+incoming_data = incoming_object.data 
+string.color=function(string_split_by_space="black black black");list=string_split_by_space.split(" ")
+  if not string_split_by_space.len then string_split_by_space="black black black"
+  colorm={"black":"<#707070>", "white":"<#BEB9E7FF>", "purple":"<#7A53F6>", "pink":"<#ED2EEA>", "red":"<color=red>", "dark_red":"<#731313>", "blue":"<color=blue>", "green":"<#2BB930>", "dark_green":"<#2C6407>", "cyan":"<#32E3EF>", "yellow":"<#D2DE0F>", "brown":"<#674D06>", "orange":"<#EA9512>"}
+  alpha="qwertyuiopasdfghjklzxcvbnm";number="1234567890";symbol="!@#$%^&*()_+-={}|[]\:;'<>?,./"+""""
+  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function
+  if not check_all() then return false
+  while list.len < 3;list.push(list[-1]);end while
+  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="alpha";newl=[];fp=1//;count=-1
+  for char in self.values
+    is_a=(tp(alpha.indexOf(char.lower)) == "number");is_n=(tp(number.indexOf(char)) == "number");is_s=(tp(symbol.indexOf(char)) == "number")
+    if char==c10 then ;newl.push(char+curr_color);continue;end if
+    if is_a then curr_type="alpha";if is_n then curr_type="number";if is_s then curr_type="symbol"
+    if curr_type=="alpha" then
+      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=coa;continue
+    end if
+    if curr_type=="number" then
+      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=con;continue
+    end if
+    if curr_type=="symbol" then
+      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=cos;continue
+    end if
+    newl.push(char)
+  end for
+  
+  self=newl.join("");ctr=0
+  for i in self
+    if i == "<" then ctr=ctr+1
+  end for
+  for i in range(1,ctr)
+    self=self+"</color>"
+  end for
+  return self
+end function
+string.c = @string.color
+string.search = function(sub_string = "")
+  return tp(self.lower.indexOf(sub_string.lower)) == "number";
+end function
+list.remove_repeats=function()
+  newl=[]
+  for i in self
+    if tp(newl.indexOf(i)) != "number" then newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+list.clean=function(example_list)
+  newl=[]
+  for i in self
+    if tp(example_list.indexOf(i)) == "number" then continue
+    newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+list.mass_concat = function()
+  result = []
+  for sub_arr in self 
+    result = result + sub_arr
+  end for 
+  return result
+end function 
+_callback = @incoming_data._callback
+Directory = @incoming_data.Directory
+Session = @incoming_data.Session
+Exploit = @incoming_data.Exploit
+library_path = @incoming_data.library_path
+database = @incoming_data.database
+lan_address = @incoming_data.lan_address
+notify = @incoming_data.notify
+hide_ip = @incoming_data.hide_ip
+tp = @typeof
+
+memory_arr = []
+metaxploit = Exploit.module.get_local_lib("metaxploit.so")//
+
+library = metaxploit.load(library_path)
+if not Exploit.module.library.get_metax() then return _callback.catch("[expl][attack][err]: metaxploit library not found on machine...")
+if tp(Session.machine.ip.get_lan_address_arr().indexOf(Session.machine.ip.get_lan_address())) != "number" then Session.machine.ip.add_lan_address(lan_address)
+
+exploit_map = Exploit.module.parse_exploits(library, database)
+memory_address_arr = exploit_map.data.indexes
+
+saved_exploits = []
+captured_exploits = []
+for address in memory_address_arr 
+  captured_exploits = Exploit.module.run_exploits(exploit_map.data[address], address, lan_address, library, lan_address, database, 0) //change_password json
+end for 
+
+
+print(notify(("bounce attack on " + ("'" + hide_ip(lan_address) + "'").c("black black white") + " completed.")) + c0)
+
+incoming_object.data = { "Session": Session, "Exploit": Exploit, "exploit_arr": captured_exploits, "library": library }
+
+return incoming_object

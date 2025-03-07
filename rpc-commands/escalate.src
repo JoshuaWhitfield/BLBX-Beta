@@ -1,0 +1,26 @@
+incoming_data = get_custom_object().data 
+_callback = @incoming_data._callback
+username = incoming_data.username
+password = incoming_data.password
+dictionary = incoming_data.dictionary 
+
+escalate = function(_user, _dict, _pass = 0)
+    if _pass then 
+        try_shell_login = get_shell(_user, _pass)
+        if typeof(try_shell_login) == "null" then return _callback.catch("[blbx][esca][err]: shell instance login attempt failed...")
+        
+        return _callback.catch(try_shell_login, 1)
+    end if 
+
+    found = false 
+    for password in _dict.values 
+        try_shell_login = get_shell(_user, password)
+        if typeof(try_shell_login) == "null" then continue 
+        found = try_shell_login
+        break
+    end for 
+    if not found then return _callback.catch("[blbx][esca][err]: dictionary attack failed. password not found...", 0)  
+    return _callback.catch(found, 1)
+end function 
+
+return escalate(username, dictionary, password)

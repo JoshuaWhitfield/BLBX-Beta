@@ -1,7 +1,15 @@
+ExecutionTypes = {"Undefined": "UNDEFINED" ,"Command": "COMMAND", "Macro": "MACRO", "GlobalFlag": "GLOBALFLAG", "Assign": "ASSIGN", "Lookup": "LOOKUP"}
+
 Interpreter = {}
 
 Interpreter.ast_arr = []
+Interpreter.chain_output = []
 Interpreter.position = 0
+
+Interpreter.wipe = function()
+    self.ast_arr = []
+    self.position = 0
+end function 
 
 Interpreter.get_ast_arr = function()
     return self.ast_arr
@@ -12,6 +20,11 @@ Interpreter.set_ast_arr = function(new_ast_arr)
     return self.get_ast_arr()
 end function
 
+Interpreter.current_token = function()
+    if not self.ast_arr.len then return false 
+    return self.ast_arr[self.position]
+end function 
+
 Interpreter.consume = function()
     if not self.get_ast_arr().len then return null 
     element = self.get_ast_arr()[0]
@@ -19,6 +32,132 @@ Interpreter.consume = function()
     return element 
 end function 
 
-interpreter.Execute = function()
+Interpreter.peek = function()
+    if not self.ast_arr.len then return false 
+    if not self.ast_arr.hasIndex(self.position + 1) then return false
+    return self.ast_arr[self.position + 1]
+end function 
+
+Interpreter.determine_execution_type = function()
+    if not self.ast_arr.len then return _callback.catch("", 0)
+    assign_token = {"type": TokenTypes.Assign, "value": "="}
+    _callback.debug(self.ast_arr[0].type, "interpreter", 44)
+    _callback.debug(self.ast_arr[0], "interpreter", 45)
+
+    if typeof([TokenTypes.Command, ].indexOf(self.ast_arr[0].type)) == "number" and (self.ast_arr[0].hasIndex(params) and typeof(self.ast_arr[0].params.indexOf(assign_token)) == "number") then
+        assignment = self.ast_arr[0].params
+        if not assignment.len == 2 then 
+            Usage.display("syntax_assign", Usage.get_usage_object("syntax_assign"))
+            return _callback.catch("[blbx][syntax][err]: invalid assignment. one value must be on either side of an assignment.")
+        end if 
+        if not tp([TokenTypes.Command, TokenTypes.Macro, TokenTypes.Flag].indexOf(assignment[0].type)) == "number" then
+            Usage.display("syntax_assign", Usage.get_usage_object("syntax_assign"))
+            return _callback.catch("[blbx][syntax][err]: invalid assignment. must have a keyword, macro, or flag on the left side of assignment.")
+        end if   
+        if assignment[0].type == TokenTypes.Command then return { "type": ExecutionTypes.Assign, "left": assignment[0], "right": assignment[1] }
+    end if  
+
+    // if TokenTypes.Flag, TokenTypes.Macro
+
+    // _callback.debug(self.ast_arr, "interpreter", 56)
+    if tp([TokenTypes.Command].indexOf(self.ast_arr[0].type)) == "number" then 
+        print "interpreter 59: "+ self.ast_arr
+        if tp(command.indexes.indexOf(self.ast_arr[0].value)) == "number" then return { "type": ExecutionTypes.Command, "left": self.ast_arr[0], "right": self.ast_arr[0].params }
+    end if 
+
+    if tp([TokenTypes.Macro].indexOf(self.ast_arr[0].type)) == "number" then
+        if not Session.env.macro.has(self.ast_arr[0].value) then return { "Type": ExecutionTypes.Macro, "left": self.ast_arr[0], "right": "undefined" }
+        return { "type": ExecutionTypes.Macro, "left": self.ast_arr[0], "right": self.ast_arr[1:] }
+    end if
+
+    if self.ast_arr.len == 1 and tp([TokenTypes.String, TokenTypes.Float].indexOf(self.ast_arr[0].type)) == "number" then return { "type": ExecutionTypes.Lookup, "value": self.ast_arr[0].value }
     
+    if self.ast_arr.len == 1 and tp([TokenTypes.Flag].indexOf(self.ast_arr[0].type)) == "number" then
+        variable_instance = Session.env.var.get(self.ast_arr[0].values)
+        if Session.env.var.has(self.ast_arr[0].value) then return { "type": ExecutionTypes.Lookup, "value": "undefined" }
+        return { "type": ExecutionTypes.Lookup, "value": variable_instance }
+    end if 
+
+    return { "type": ExecutionTypes.Undefined, "value": "undefined" }
+end function 
+
+
+Interpreter.run_command = function(command_ast, show_error = 1, data = 0)
+
+    if not command.hasIndex(command_ast[0].value) then 
+        print
+        printb("[blbx][sys]: command not found...".c("black black purple"))
+        print 
+        return _callback.catch("", 0) 
+    end if 
+  
+    safe_run_result = Session.process.safe_run(command_ast[0].value, command_ast[0].params, data)
+    
+    _callback.debug(safe_run_result, "prompt", 65)
+    if not safe_run_result.status and show_error then
+        print b + safe_run_result.data.c("black black purple")
+        print 
+    end if
+
+    return safe_run_result
+end function 
+
+
+Interpreter.Execute = function(input)
+    cmd_arr = input.split(":")
+    count = -1
+    for cmd in cmd_arr 
+        Parser.wipe()
+        self.wipe()
+        _callback.debug("<color=green>"+cmd, "interpreter".c("purple"), 108)
+        _callback.debug("<color=green>"+self.ast_arr, "interpreter".c("purple"), 109)
+        command_ast = Parser.ParseCLI(input)
+        self.set_ast_arr(command_ast)
+        interpreter_ast = self.determine_execution_type()
+        count = count + 1 
+        if interpreter_ast.hasIndex("status") and not interpreter_ast.status then return self.chain_output
+
+        //_callback.debug(interpreter_ast, "interpreter", 82)
+        
+        if interpreter_ast.type == ExecutionTypes.Assign then 
+            if interpreter_ast.right[0].type == TokenTypes.Command then return Session.env.var.set(interpreter_ast.left, self.Execute(interpreter_ast.right))
+            Session.env.var.set(interpreter_ast.left, interpreter_ast.right)
+            assign_value = interpreter_ast.right.clean([{"type": TokenTypes.Assign, "value": "="}])[-1]
+            self.chain_output.push(assign_value)
+            print "<color=red>"+ assign_value
+            print "<color=red>"+ interpreter_ast
+            // _callback.debug("<color=red>"+interpreter_ast.right, "<color=red>intrepreter", 183)
+            return _callback.catch(assign_value, 1)
+        end if 
+
+        // _callback.debug(interpreter_ast, "interpreter", 180)
+        if interpreter_ast.type == ExecutionTypes.Command then 
+            input = [interpreter_ast.left.value]
+            for token in interpreter_ast.right
+                input.push(token.value)
+            end for 
+            input = input.join(" ")
+            // _callback.debug(input, "interpreter", 94)
+            if count > 0 then print self.get_message() + (cmd).c("purple") 
+            command_result = self.handle_piping(cmd, show_error)
+            
+            self.chain_output.push(command_result)
+            return command_result    
+        end if 
+
+        if interpreter_ast.type == ExecutionTypes.Macro then 
+
+        end if 
+
+        if interpreter_ast.type == ExecutionTypes.GlobalFlag then 
+
+        end if 
+
+        if interpreter_ast.type == ExecutionTypes.Lookup then 
+
+        end if 
+    end for 
+
+
+    return self.chain_output
 end function
