@@ -149,11 +149,9 @@ _json.lexer.next_token = function()
         
         //Create String Token
         keyword = value
-        _callback.debug(keyword, "checking keys".c("purple"), 151)
         return { "type": self.TokenTypes.String, "value": keyword.values.clean(["""", ","]).join("").trim }
     end if 
 
-    _callback.debug(value, "checking extra".c("purple"), 151)
     if value.search("null") then return { "type": self.TokenTypes.Null, "value": null }
 
     //Create Number Token
@@ -299,10 +297,6 @@ _json.scaffold.parse_list = function(input_array, output_array)
             new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
             count = new_input_array.len 
             skip = true 
-            print element 
-            print new_input_array
-            _callback.debug(element, "json element", 297)
-            _callback.debug(new_input_array, "json new_input_array", 298)
             output_array.push(self.parse_map(new_input_array))
             continue
         end if 

@@ -77,7 +77,7 @@ _json = {}
 ///-- input for scaffolding and parsing.
 
 _json.lexer = {}
-_json.lexer.TokenTypes = { "Key":"KEY", "Map": "MAP", "List": "LIST", "CloseList": "CLOSELIST", "CloseMap": "CLOSEMAP", "String": "STRING", "Number": "NUMBER" }
+_json.lexer.TokenTypes = { "Key":"KEY", "Map": "MAP", "List": "LIST", "CloseList": "CLOSELIST", "CloseMap": "CLOSEMAP", "String": "STRING", "Number": "NUMBER", "Null": "NULL" }
 _json.lexer.token_output = []
 _json.lexer.input = ""
 _json.lexer.position = 0 
@@ -152,8 +152,10 @@ _json.lexer.next_token = function()
         return { "type": self.TokenTypes.String, "value": keyword.values.clean(["""", ","]).join("").trim }
     end if 
 
+    if value.search("null") then return { "type": self.TokenTypes.Null, "value": null }
+
     //Create Number Token
-    if self.get_input().len and value.is_match("\d") then 
+    if value.is_match("\d") then 
         number = value
         return { "type": self.TokenTypes.Number, "value": number.values.clean([",", char(10)]).join("").val }
     end if 
@@ -261,6 +263,7 @@ _json.scaffold.parse_map = function(input_array, output_array = 0)
             skip = true
             continue 
         end if 
+        
         output_array.push(element)
     end for 
 
@@ -294,6 +297,8 @@ _json.scaffold.parse_list = function(input_array, output_array)
             new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
             count = new_input_array.len 
             skip = true 
+            print element 
+            print new_input_array
             output_array.push(self.parse_map(new_input_array))
             continue
         end if 
@@ -376,6 +381,16 @@ _json.parser.parse_map = function(input_array, output_object = 0)
             output_object[element.value] = input_array[index + 1].value
             skip = true 
             continue 
+        end if 
+        if element.type == _json.lexer.TokenTypes.Map then 
+            output_object[element.value] = self.parse_map(input_array[index + 1])
+            skip = true 
+            continue 
+        end if 
+        if element.type == _json.lexer.TokenTypes.List then 
+            output_object[element.value] = self.parse_list(input_array[index + 1])
+            skip = true 
+            continue
         end if 
     end for 
 
@@ -480,8 +495,8 @@ JSON.stringify = function(map_object = {}, indentation = 2, jump = 2)
                 result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + element
                 continue 
             end if
-            if typeof(element) == "function" then 
-                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + "Function()"
+            if typeof(element) == "null" then 
+                result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + "Null"
                 continue 
             end if
         end for 
@@ -504,12 +519,8 @@ JSON.stringify = function(map_object = {}, indentation = 2, jump = 2)
             result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + value.quote
             continue 
         end if 
-        if typeof(value) == "number" then 
-            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": " + value
-            continue 
-        end if 
-        if typeof(value) == "function" then 
-            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": Function()"
+        if typeof(value) == "null" then 
+            result = result + fif(result.len == 1, char(10), (", " + char(10))) + space + key.quote + ": Null"
             continue 
         end if 
     end for 
