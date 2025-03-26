@@ -1,30 +1,3 @@
-string.quote = function()
-    return """" + self + """"
-end function 
-
-string.search = function(sub_string = "")
-  return typeof(self.lower.indexOf(sub_string.lower)) == "number";
-end function
-
-list.clean=function(example_list)
-  newl=[]
-  for i in self
-    if typeof(example_list.indexOf(i)) == "number" then continue
-    newl.push(i)
-  end for
-  self=newl
-  return self
-end function
-
-list.remove_repeats=function()
-  newl=[]
-  for i in self
-    if typeof(newl.indexOf(i)) != "number" then newl.push(i)
-  end for
-  self=newl
-  return self
-end function
-
 list.reverse = function()
   new_arr = []
   for elem in self 
@@ -32,17 +5,6 @@ list.reverse = function()
   end for 
   return new_arr
 end function 
-
-list.indexOfFurthest = function(look_for = false)
-    if not look_for then return null 
-    found = null 
-    index = -1
-    for element in self 
-        index = index + 1
-        if element == look_for then found = index
-    end for 
-    return found
-end function
 
 callable = function(value)
     return typeof(value) == "function";
@@ -67,8 +29,6 @@ fif = function(condition, onSuccess = @anonSuccess, onFailure = @anonFailure)
     if callable(onFailure) then return onFailure();
     return onFailure();
 end function
-
-
 
 ///-- JSON internal dependency
 _json = {}
@@ -130,15 +90,23 @@ _json.lexer.next_token = function()
 
     if typeof((char(10) + " ,").values.indexOf(value)) == "number" then return self.next_token()
     if value.is_match(key_regex) then 
-        if  value[-1] == ":" then
+        if value[-1] == ":" and self.peek() then
+            
             //Create Map-Key Token 
-            if value[-1] == ":" and self.peek()[0] == "{" then 
-                // clean and return key
+            if self.peek().search("{}") then 
                 self.consume()
-                return { "type": self.TokenTypes.Map, "value": value[:-1].values.clean([""""]).join("") }
+                return [{ "type": self.TokenTypes.Map, "value": value[:-1].values.clean([""""]).join("") }, { "type": self.TokenTypes.CloseMap, "value": "}" }]
             end if 
             //Create List-Key Token
-            if value[-1] == ":" and self.peek()[0] == "[" then 
+            if self.peek().search("[]") then 
+                self.consume()
+                return [{ "type": self.TokenTypes.List, "value": value[:-1].values.clean([""""]).join("") }, { "type": self.TokenTypes.CloseList, "value": "]" }]
+            end if 
+            if self.peek().search("{") then 
+                self.consume()
+                return { "type": self.TokenTypes.Map, "value": value[:-1].values.clean([""""]).join("") } 
+            end if 
+            if self.peek().search("[") then 
                 self.consume()
                 return { "type": self.TokenTypes.List, "value": value[:-1].values.clean([""""]).join("") }
             end if 
@@ -161,6 +129,15 @@ _json.lexer.next_token = function()
     end if 
 
     //Create Literal Array/Map Token
+    if value.search("[]") then
+        self.consume()
+        return [ { "type": _json.lexer.TokenTypes.List, "value": "literal" }, { "type": _json.lexer.TokenTypes.CloseList, "value": "]" } ]
+    end if 
+    if value.search("{}") then 
+        self.consume()
+        return [ { "type": _json.lexer.TokenTypes.Map, "value": "literal" }, { "type": _json.lexer.TokenTypes.CloseMap, "value": "}" } ]
+    end if 
+
     if value.search("[") then return { "type": self.TokenTypes.List, "value": "literal" }
     if value.search("{") then return { "type": self.TokenTypes.Map, "value": "literal" }
 
@@ -178,8 +155,12 @@ _json.lexer.tokenize = function(token_output = 0)
     if not token_output then token_output = []
     current_token = self.next_token()
     if typeof(current_token) == "null" then return token_output
+    if not typeof(current_token) == "list" then current_token = [current_token]
 
-    token_output.push(current_token)
+    for element in current_token 
+        token_output.push(element)
+    end for 
+
     return self.tokenize(token_output)
 end function
 
@@ -209,133 +190,32 @@ _json.scaffold.set_input = function(new_input)
     return self.input 
 end function
 
-// peek the next element of the 
-// input array passed as a parameter
-_json.scaffold.peek = function(input_array)
-    if not input_array then input_array = self.get_input()
-    if not input_array.hasIndex(self.position + 1) then return false
-    return input_array[self.position + 1]
-end function
-
-// get the current element of the
-// input array passed as a parameter
-_json.scaffold.get_current = function(input_array)
-    if not input_array then input_array = self.get_input()
-    if not input_array.len then return false
-    return input_array[self.position]
-end function 
-
-// consume the next token in the scaffold input
-_json.scaffold.consume = function()
-    result = self.get_current()
-    if not result then 
-        return result 
-    end if 
-    self.set_input(self.get_input()[1:])
-    return result
-end function 
-
-// parse a map into the scaffold nested array structure
-_json.scaffold.parse_map = function(input_array, output_array = 0)
-    if not output_array then output_array = []
-    skip = false 
-    count = 0
-    for element in input_array
-        if skip then 
-            if not count then skip = false 
-            if count > 0 then count = count - 1
-            continue 
-        end if 
-        self.consume()
-        if element.type == _json.lexer.TokenTypes.Map then 
-            output_array.push(element)
-            new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
-            output_array.push(self.parse_map(new_input_array))
-            count = new_input_array.len
-            skip = true
-            continue
-        end if 
-        if element.type == _json.lexer.TokenTypes.List then 
-            output_array.push(element)
-            new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseList, "value": "]"}))
-            output_array.push(self.parse_list(new_input_array))
-            count = new_input_array.len 
-            skip = true
-            continue 
-        end if 
-        
-        output_array.push(element)
-    end for 
-
-    return output_array
-end function
-
-// parse a list into the scaffold nested array structure
-_json.scaffold.parse_list = function(input_array, output_array)
-    if not output_array then output_array = []
-    count = 0
-    skip = false 
-    for element in input_array 
-        if skip then 
-            if not count then skip = false 
-            if count > 0 then count = count - 1 
-            continue 
-        end if    
-
-        self.consume()
-        if element.type == _json.lexer.TokenTypes.List then 
-            output_array.push(element)
-            new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOfFurthest({"type": _json.lexer.TokenTypes.CloseList, "value": "]"}))
-            count = new_input_array.len 
-            skip = true
-            output_array.push(self.parse_list(new_input_array))
-            continue 
-        end if 
-
-        if element.type == _json.lexer.TokenTypes.Map then 
-            output_array.push(element)
-            new_input_array = slice(input_array, input_array.indexOf(element) + 1, input_array.indexOf({"type": _json.lexer.TokenTypes.CloseMap, "value": "}"}))
-            count = new_input_array.len 
-            skip = true 
-            output_array.push(self.parse_map(new_input_array))
-            continue
-        end if 
-       
-        output_array.push(element)
-    end for 
-  
-    return output_array
-end function 
-
 // parse all tokens in scaffold input into 
-// scaffold nested array structure
-_json.scaffold.parse = function(output_array = 0)
+// the scaffold nested array structure
+_json.scaffold.parse = function(output_array = 0, stack = 0)
     if not output_array then output_array = []
-    current_token = self.consume()
-    if not current_token then 
-        return output_array
-    end if
+    if not stack then stack = []
 
-    // //handle maps 
-    if current_token.type == _json.lexer.TokenTypes.Map then 
-        output_array.push(current_token)
-        new_input_array = slice(self.get_input(), self.get_input().indexOf(current_token) + 1, self.get_input().indexOf({ "type": _json.lexer.TokenTypes.CloseMap, "value": "}" }))
-        output_array.push(self.parse_map(new_input_array))
-        return self.parse(output_array)
-    end if 
+    for token in self.get_input() 
+        if typeof([_json.lexer.TokenTypes.Map, _json.lexer.TokenTypes.List].indexOf(token.type)) == "number" then 
+            output_array.push(token)
+            new_structure = []
+            output_array.push(new_structure)
+            stack.push(output_array)
+            output_array = new_structure 
+            continue
+        end if 
 
-    //handle lists
-    if current_token.type == _json.lexer.TokenTypes.List then 
-        output_array.push(current_token)
-        new_input_array = slice(self.get_input(), self.get_input().indexOf(current_token) + 1, self.get_input().indexOf({ "type": _json.lexer.TokenTypes.CloseList, "value": "]" }))
-        output_array.push(self.parse_list(new_input_array))
-        return self.parse(output_array)
-    end if 
+        if typeof([_json.lexer.TokenTypes.CloseMap, _json.lexer.TokenTypes.CloseList].indexOf(token.type)) == "number" then
+            output_array.push(token)
+            output_array = stack.pop()
+            continue 
+        end if 
 
-    //handle regular values: 
-    output_array.push(current_token)
+        output_array.push(token)
+    end for
 
-    return self.parse(output_array)
+    return output_array  
 end function 
 
 ///-- JSON Parser 
@@ -364,54 +244,37 @@ _json.parser.peek = function(input_array)
     return input_array[self.position + 1]
 end function 
 
-// parse map represented by a nested 
-// array into object form and return it
-_json.parser.parse_map = function(input_array, output_object = 0)
-    if not output_object then output_object = {}
-    index = -1
-    skip = false 
-    count = 0
-    for element in input_array 
-        index = index + 1
-        if skip then ;skip = false;continue;end if
-        if typeof(element) == "list" then continue
-        if element.type == _json.lexer.TokenTypes.Key then 
-            output_object[element.value] = input_array[index + 1].value
-            skip = true 
-            continue 
-        end if 
-        if element.type == _json.lexer.TokenTypes.Map then 
-            output_object[element.value] = self.parse_map(input_array[index + 1])
-            skip = true 
-            continue 
-        end if 
-        if element.type == _json.lexer.TokenTypes.List then 
-            output_object[element.value] = self.parse_list(input_array[index + 1])
-            skip = true 
-            continue
-        end if 
-    end for 
-
-    return output_object
-end function
+_json.parser.consume = function()
+    if not self.get_input().len then return false 
+    result = self.get_input[0]
+    self.set_input(self.get_input()[1:])
+    return result 
+end function 
 
 // parse list represented by a nested 
-// array into object borm and return it
+// array into object form and return it
 _json.parser.parse_list = function(input_array, output_arr = 0)
     if not output_arr then output_arr = []  
     index = -1
     skip = false 
     for element in input_array 
-        if skip then ;skip = false;;continue;end if 
-        index = index + 1 
-        if typeof(element) == "list" then
-            output_arr.push(self.parse_list(element))
-            continue 
-        end if 
+        if skip then ;skip = false;continue;end if 
+        index = index + 1  
         if element.type == _json.lexer.TokenTypes.Map then 
-            output_arr.push(self.parse_map(input_array[index + 1]))
+            output_arr.push(self.parse(input_array[index + 1]))
             skip = true
             continue
+        end if 
+        if element.type == _json.lexer.TokenTypes.List then 
+            offset = 1
+            next_iter_array = input_array[index + offset]
+            while typeof(next_iter_array) != "list" 
+                offset = offset + 1
+                next_iter_array = input_array[index + offset]
+            end while 
+            output_arr.push(self.parse_list(next_iter_array))
+            skip = true 
+            continue 
         end if 
         if typeof([_json.lexer.TokenTypes.List, _json.lexer.TokenTypes.Map, _json.lexer.TokenTypes.CloseList, _json.lexer.TokenTypes.CloseMap].indexOf(element.type)) == "number" then continue
         output_arr.push(element.value)
@@ -421,41 +284,38 @@ end function
 
 // parse parser input from scaffold into object form
 // and recursively handle arrays and maps
-_json.parser.parse = function(input_array = 0, object_output = 0)
-    if not input_array then input_array = []
+_json.parser.parse = function(input_array, object_output = 0)
     if not object_output then object_output = {}
-    skip = false 
-    count = 0
-    count_iter = -1
-    for element in input_array 
-        count_iter = count_iter + 1
+
+    skip = false
+    index = -1
+    
+    for token in input_array 
+        index = index + 1
         if skip then 
-            if not count then skip = false 
-            if count >= 0 then count = count - 1
-            continue
-        end if 
-        
-        if element.type == _json.lexer.TokenTypes.Key then 
-            object_output[element.value] = self.peek(input_array).value
-            skip = true 
-            count = 0
+            skip = false 
             continue 
         end if 
 
-        if element.type == _json.lexer.TokenTypes.Map then 
-            object_output[element.value] = self.parse(self.peek(input_array[count_iter:]))
-            skip = true 
-            count = 0
+        if token.type == _json.lexer.TokenTypes.Map then 
+            object_output[token.value] = self.parse(input_array[index + 1])
+            skip = true
             continue
         end if 
 
-        if element.type == _json.lexer.TokenTypes.List then 
-            object_output[element.value] = self.parse_list(self.peek(input_array[count_iter:]))
+        if token.type == _json.lexer.TokenTypes.List then 
+            object_output[token.value] = self.parse_list(input_array[index + 1])
+            skip = true
+            continue
+        end if 
+
+        if token.type == _json.lexer.TokenTypes.Key then 
+            object_output[token.value] = input_array[index + 1].value
             skip = true 
-            count = 0
             continue
         end if 
     end for 
+
     return object_output
 end function
 
@@ -465,11 +325,12 @@ JSON = {}
 // JSON inherit internal dependencies
 JSON.internal = _json
 
-// JSON stringify
+// JSON write
 JSON.write = function(map_object = {}, indentation = 2, jump = 2)
-    if not map_object.len then return "{}"
     if not typeof(["map", "list"].indexOf(typeof(map_object))) == "number" then return false 
-
+    if not map_object.len and typeof(map_object) == "map" then return "{}"
+    if not map_object.len and typeof(map_object) == "list" then return "[]"
+    
     open_bracket = fif(typeof(map_object) == "map", "{", "[")
     closed_bracket = fif(typeof(map_object) == "map", "}", "]")
     space = " " * indentation
@@ -528,8 +389,6 @@ JSON.write = function(map_object = {}, indentation = 2, jump = 2)
     return result 
 end function 
 
-//write = JSON.write({"hello": "world", "number": 1234, "map": {"number2": "5678", "list": [1, 2, 3, ["sub_arr"]]}, "list2": ["1234", 5678, {"sub": "map"}]})
-
 // JSON parse
 JSON.read = function(serialized_object = "{" + char(10) + "}") 
     if typeof(["{" + char(10) + "}", "{}"].indexOf(serialized_object)) == "number" then return {}
@@ -537,9 +396,8 @@ JSON.read = function(serialized_object = "{" + char(10) + "}")
     tokens = self.internal.lexer.tokenize()
     self.internal.scaffold.set_input(tokens[1:])
     scaffold = self.internal.scaffold.parse(self.internal.scaffold.output_array)
-
+    self.internal.parser.set_input(scaffold)
     return self.internal.parser.parse(scaffold) 
 end function 
 
-//print JSON.parse(write)
 

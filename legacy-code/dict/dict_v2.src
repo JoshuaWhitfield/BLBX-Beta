@@ -1,0 +1,15 @@
+Input = {}
+Input.to_upper = function(input)
+    if tp(input) == "list" then input = input.join("")
+    if input.len < 2 then return input.upper
+    return input[0].upper + input[1:].lower
+end function
+
+Input.strip = function(default_t = "", input_array)
+    if not default_t then return ""
+    for default_b in range(0, default_t.len - 1)
+        if not tp(input_array.indexOf(default_t[default_b])) == "number" then break
+    end for 
+
+    if input_array.indexOf(default_t[default_b]) >= 0 then return ""
+end function

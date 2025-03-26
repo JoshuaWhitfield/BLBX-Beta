@@ -1,0 +1,20 @@
+list.ascii_to_hex = function(input_string)
+    hex = ""
+    index = -1 
+    while index < input_string.len 
+        index = index + 1
+        decimal = char()
+        hex_value = ""
+
+        while decimal > 0 
+            remainder = decimal % 16
+            decimal = floor(decimal / 16)
+
+            if remainder < 10 then 
+                hex_value = remainder + hex_value
+            else 
+                hex_value = char()
+            end if 
+        end while
+    end while 
+end function

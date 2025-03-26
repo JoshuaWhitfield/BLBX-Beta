@@ -1,14 +1,30 @@
 _callback = {}
 _callback.debug_mode = false 
+
 _callback.toggle_debug = function()
-    self.debug_mode = not self.debug_mode
+    self.debug_mode = not self.debug_mode 
     return self.debug_mode
-end function 
+end function
+
 _callback.catch = function(message = "", status = 0)
     if tp(message) == "string" then message = message
     return { "status": status, "data": message }
 end function
+
 _callback.debug = function(data, file_name, line_number)
-   if self.debug_mode then print JSON.write({"location": file_name, "line No.": line_number, "contents": data})
+    if self.debug_mode then print JSON.write({"location": file_name, "line No.": line_number, "contents": data})
 end function 
+
+_callback.local_debug = function(data, file_name, line_number)
+    self.toggle_debug()
+    self.debug(data, file_name, line_number)
+    self.toggle_debug()
+end function
+
+_callback.loading_key_frame = function(percent)
+    progress = round(percent * 100)
+    progress_bar = "%" * progress 
+    anti_bar = ("<s><s>" + (" " * (100 - progress)) + "</s></s>").c("black")
+    return ("<size=16>[".c("black") + progress_bar.c("purple") + anti_bar.c("black") + "] ".c("black") + (str(progress) + "%</size>").c("purple")) + c0
+end function
 //callback

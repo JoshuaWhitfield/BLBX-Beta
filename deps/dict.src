@@ -44,60 +44,73 @@ PasswordGenerator.init=function(samples)
     end for
   end for
 end function
-PasswordGenerator.r=function(length,snip,object)
+PasswordGenerator.r=function(length,snip,array)
   suffix=snip[snip.len-3:]
   if self.c.hasIndex(suffix) and snip.len<length then
     for char in self.c[suffix]
-      self.r(length,snip+char,object)
+      self.r(length,snip+char,array)
     end for
   else
-    object[snip]=1
+    array.push(snip)
   end if
 end function
 PasswordGenerator.AllPasswords=function()
-  r={}
+  passwd_seeds = []
   for string in self.s
     for i in range(0,string.len-4)
-      self.r(string.len,string[i:i+3],r)
+      self.r(string.len,string[i:i+3],passwd_seeds)
     end for
   end for
   sub=[];final={};final2=[]
-  for s in r.indexes
-    //if sub.indexes.len == 3 then ;o=o+sub;sub={}; end if
-    s=inputClean(s)
-    if s.indexOf(" ")>=0 then
-    n=s.split(" ")
-    for i in range(0,n.len-1)
-    n[i]=String.capitalize(n[i])
-    end for;s=n.join(" ")
-    else
-    s=String.capitalize(s)
-    end if
-    if s.len<5 then continue
-    a=s[0]
-    b=s[1]
-    if a.lower==b or "hrl'aeiou".indexOf(b)==null and "AEIOUS".indexOf(a)==null and ["Ch","Mc"].indexOf(a+b)==null then s=String.capitalize(s[1:])
-    s=String.strip(s,"'-")
 
-    sub.push(s)
-    sub.push(s.lower)
+  PASSWD_TOTAL = 341000
+  LIMIT = 200
+  limit_check = 0
+  count = 0
+  progress_bar_history = []
+
+  for seed in passwd_seeds
+    seed=inputClean(seed)
+    if seed.indexOf(" ")>=0 then
+      n=seed.split(" ")
+      for i in range(0,n.len-1)
+        n[i]=String.capitalize(n[i])
+      end for;seed = n.join(" ")
+    else
+      seed = String.capitalize(seed)
+    end if
+    if seed.len < 5 then continue
+    a=seed[0]
+    b=seed[1]
+    if a.lower==b or "hrl'aeiou".indexOf(b)==null and "AEIOUS".indexOf(a)==null and ["Ch","Mc"].indexOf(a+b)==null then seed = String.capitalize(seed[1:])
+    seed = String.strip(seed, "'-")
+
+    sub.push(seed)
+    sub.push(seed.lower)
 
     str_len=str(sub.len)
     if str_len.len > 3 and str_len[-3:].search("000") then 
-      final[md5(s)] = s
-      final[md5(s.lower)] = s.lower
+      final[md5(seed)] = seed
+      final[md5(seed.lower)] = seed.lower
+      limit_check = limit_check + 1
+      if limit_check == LIMIT then 
+        limit_check = 0
+        count = count + 1
+        progress = ((count * LIMIT) / PASSWD_TOTAL)
+        progress_bar = (a + _callback.loading_key_frame(progress))
+        if tp(progress_bar_history.indexOf(progress_bar)) == "number" then 
+          clear_screen 
+          printb(progress)
+          progress_bar_history.push(progress)
+        end if 
+      end if 
       continue
     end if
   end for
 
-  print
-  print 
-  print "dict: "+ final 
-  print 
-  print 
   return final
 end function
 
-//PasswordGenerator.init(PasswordGenerator.PASSWORDS)
+// PasswordGenerator.init(PasswordGenerator.PASSWORDS)
 
 //dict.so

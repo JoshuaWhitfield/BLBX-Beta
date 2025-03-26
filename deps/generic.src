@@ -340,6 +340,7 @@ end function
 list.copy=function();res=[];for i in self;res.push(i);end for;self=res;return self;end function
 list.clean=function(example_list)
   newl=[]
+  if not tp(example_list) == "list" then example_list = [example_list]
   for i in self
     if tp(example_list.indexOf(i)) == "number" then continue
     newl.push(i)
@@ -448,7 +449,7 @@ map.groupBy = function(amount = 5000)
   values = self.values 
   result = []
   sub_map = {}
-  count = -1
+  count = 0
   index = -1
   for key in keys 
     count = count + 1

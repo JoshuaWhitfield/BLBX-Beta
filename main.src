@@ -1,8 +1,8 @@
 import_code("/root/blackbox/generic");
 import_code("/root/blackbox/callback");
 import_code("/root/blackbox/json")
-import_code("/root/blackbox/dict")
 import_code("/root/blackbox/markup");
+import_code("/root/blackbox/dict")
 import_code("/root/blackbox/internal");
 import_code("/root/blackbox/lexer");
 import_code("/root/blackbox/parser");
@@ -23,8 +23,14 @@ for database_name in database_name_arr
     if not Session.db.has(database_name) then Session.db.create(database_name)
 end for 
 
+first_iteration = true 
 while Session.process.is_running()
-    input = user_input(Prompt.get_message()) 
-
-    command_result = Interpreter.Execute(input)//Prompt.prepare_input(input)
+    if params.len and first_iteration then input = Params.translate_input_brackets(params.join(" ")) else input = user_input(Prompt.get_message())
+    if first_iteration then first_iteration = false 
+    //_callback.toggle_debug() 
+    Interpreter.set_input(input.split(":").clean([""]))
+    command_result = Interpreter.Execute()//Prompt.prepare_input(input)
+    Interpreter.wipe(1, 1)
+    _callback.debug(command_result, "result", 31)
+    //_callback.toggle_debug()
 end while

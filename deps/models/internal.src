@@ -89,13 +89,24 @@ end function
 
 Session = {}
 
-Session.process = {};
+Session.process = {}
 
 Session.process.safe_run = function(cmd_name, parameters, data = 0)
     if tp(command.indexes.indexOf(cmd_name)) != "number" then return false
     command_syntax_proxy = command[cmd_name]
     return command_syntax_proxy(parameters)
 end function
+
+Session.process.internal_run = function(cmd_name, paramters_str = 0, data = 0)
+    if not paramters_str then 
+        parameters = [] 
+    else 
+        Parser.reset()
+        parameters = Parser.ParseCLI(cmd_name + " " + paramters_str)[0].params
+    end if
+    //_callback.local_debug("<color=red>" + parameters, "parameters", 103)
+    return self.safe_run(cmd_name, parameters, data)
+end function    
 
 Session.process.status = true
 Session.process.connected = false
@@ -127,7 +138,7 @@ Session.env.var.has = function(variable_name)
 end function
 
 Session.env.var.get = function(variable_name)
-    if not self.body.has(variable_name) then return false 
+    if not self.has(variable_name) then return false 
     return self.body[variable_name]
 end function
 
@@ -204,6 +215,7 @@ Session.db.init_database = function(table_name)
     init_file.chmod("o-rwx")
 end function
 
+
 Session.db.select = function(table_name)
     if table_name.split("/").len == 1 then table_name = self.get_path(table_name)
     target_directory = Directory.find_file(get_shell.host_computer.File("/"), table_name)
@@ -218,6 +230,18 @@ Session.db.add_file = function(table_name)
     create_entry_file = get_shell.host_computer.touch(database.path, entry_name)
     if not create_entry_file then return false
     check_entry = Directory.find_file(get_shell.host_computer.File("/"), database.path + "/" + entry_name)
+    if tp(check_entry) == "string" then 
+        print 
+        printb(("* * " + check_entry + " * *").c("black"))
+        printb(("* * failed to add database entry '" + entry_name + "'... * *").c("black black purple"))
+        print 
+    end if 
+    if not check_entry then 
+        print 
+        printb(("* * failed to add database entry '" + entry_name + "'... * *").c("black black purple"))
+        printb(("* * local machine is out of disk space * *").c("black black purple"))
+        print 
+    end if 
     check_entry.set_content(JSON.write({}))
     return check_entry
 end function
@@ -227,17 +251,58 @@ Session.db.create = function(table_name)
     self.add_file(table_name)
 end function
 
-Session.db.parse = function(table_name)
+Session.db.update_db_init_entries = function(table_name, amount)
+    database = self.select(table_name)
+    if not database then return false 
+
+end function 
+
+Session.db.parse = function(table_name, clear_screen_bool = false)
     database = self.select(table_name)
     if tp(database) != "file" then return false 
     database = database.get_files
-
+    progress_bar_history = []
     result = {}
+    count = 0
+    LIMIT = 200
     for entry_file in database 
+        count = count + 1
         if not entry_file.name.lower.search(table_name) then continue 
         result = result + JSON.read(entry_file.get_content)
+        progress = count * LIMIT / (database.len * LIMIT)
+        progress_bar = (a + _callback.loading_key_frame(progress))
+        if tp(progress_bar_history.indexOf(progress_bar)) != "number" then 
+            if clear_screen_bool then clear_screen else print
+            printb(progress_bar)
+            progress_bar_history.push(progress_bar)
+        end if  
     end for 
     return result 
+end function
+
+Session.db.speed_parse = function(table_name, clear_screen_bool = true) //arrays only
+    database = self.select(table_name)
+    if tp(database) != "file" then return false 
+    database = database.get_files
+    result = []
+    progress_bar_history = []
+    count = 0
+    LIMIT = 200
+    for entry_file in database 
+        count = count + 1
+        if not entry_file.name.lower.search(table_name) then continue
+        entry = entry_file.get_content.split("\[|\]|\{|\}|\:|\" + "".quote + "|\,|\s|\n|\t").clean([""])
+        result = result + entry 
+        progress = count * LIMIT / (database.len * LIMIT)
+        progress_bar = (a + _callback.loading_key_frame(progress))
+        if tp(progress_bar_history.indexOf(progress_bar)) != "number" then 
+            if clear_screen_bool then clear_screen else print
+            printb(progress_bar)
+            progress_bar_history.push(progress_bar)
+        end if 
+    end for 
+
+    return result
 end function
 
 Session.db.split_map = function(map, max_size = 10000)
@@ -276,29 +341,85 @@ Session.db.split_map = function(map, max_size = 10000)
     return master
 end function 
 
-Session.db.add_to = function(incoming_data = {}, table_name)
-    if not incoming_data.len then return true 
-    _callback.debug(incoming_data.len, "internal", 216)
 
+
+Session.db.add_to = function(incoming_data = {}, table_name)
     if tp(incoming_data) != "map" and tp(incoming_data) != "list" then return false
+    if not incoming_data.len then return true 
     database = self.select(table_name)
     if not database then return false
     database = database.get_files
     if not database.len then self.init_database(table_name)
-    if database.len == 1 then 
+    _callback.debug("<color=red>" + database.len, "internal add_to", 350)
+    if database.len < 2 then
+        _callback.debug("<color=red>add_to: checking new file" + database.len, "internal add_to", 352)
         self.add_file(table_name)
-        database = self.select(table_name).get_files
+        return self.add_to(incoming_data, table_name)
+    end if 
+
+    if tp(incoming_data) == "list" then
+        count = -1
+        index = -1
+        progress_bar_history = []
+
+        _callback.local_debug(incoming_data, "internal", 365)
+        while incoming_data.hasIndex(index)
+            content_object = incoming_data[index]
+            index = index + 1
+            count = count + 1
+            database = self.select(table_name).get_files
+            entry_file = database[-1]
+            entry_file_content = entry_file.get_content 
+            if JSON.read(entry_file.get_content).len >= incoming_data.len then 
+                self.add_file(table_name)
+                entry_file = self.select(table_name).get_files[-1]
+                index = index - 1
+                continue
+            end if
+            progress_bar = (a + _callback.loading_key_frame(count * 200 / (incoming_data.len * 200)))
+            if tp(progress_bar_history.indexOf(progress_bar)) != "number" then 
+                clear_screen
+                printb(progress_bar)
+                progress_bar_history.push(progress_bar)
+            end if  
+            self.add_to(content_object, table_name)
+        end while 
+        return true 
     end if 
     entry_file = database[-1]
     entry_file_content = entry_file.get_content 
-    if entry_file_content.values.len >= 30000 then 
+    parsed_contents = JSON.read(entry_file_content)
+    if parsed_contents.len >= 200 then 
         self.add_file(table_name)
+        _callback.local_debug("<color=red>contents too large, continuing...")
         return self.add_to(incoming_data, table_name)
     end if  
-    entry_file.set_content(JSON.write(incoming_data))
-
+    if tp(incoming_data) == "map" then entry_file.set_content(JSON.write(parsed_contents + incoming_data))
+    //_callback.local_debug("<color=orange>success!")
+    //_callback.local_debug("<color=green>" + entry_file.get_content, "<color=green>updated entry file content", 355)
     return true
 end function 
+
+Session.db.add_array_to = function(incoming_data = [], table_name, json_bool = false)
+    database = self.select(table_name)
+    if not tp(database) == "file" then return false 
+    database = database.get_files 
+    if database.len < 2 then 
+        self.add_file(table_name)
+        return self.add_array_to(table_name)
+    end if
+    
+    entry_file = database[-1]
+    if entry_file.get_content.len >= 59999 then 
+        self.add_file(table_name)
+        return self.add_array_to(table_name)
+    end if 
+
+    entry_file_content = entry_file.get_content 
+    entry_file.set_content(entry_file_content + fif(json_bool, JSON.write(incoming_data), incoming_data.join(char(10))))
+    
+    return true
+end function
 
 Session.db.reset = function(table_name)
     database = self.select(table_name)
@@ -316,7 +437,7 @@ Session.db.set = function(incoming_data, table_name)
     if tp(database) != "file" then return false 
     if tp(incoming_data) == "list" then 
         incoming_data = incoming_data.combine
-        if not incoming_data.len then return false
+        if not incoming_data or not incoming_data.len then return false
     end if 
     self.add_to(incoming_data, table_name) 
     return true
@@ -349,20 +470,19 @@ Session.db.init = function(table_name_arr)
             self.create(table_name)
             database = self.select(table_name)
         end if 
-
-        // if table_name == "dictionary" and not database.get_files.len > 1 then 
-        //     PasswordGenerator.init(PasswordGenerator.PASSWORDS)    
-        //     printb(a + "*** building dictionary attack hash map ***".color("purple"))
-        //     printb(a + "this may take a minute".color("black"))
-        //     printb(a + "please wait".color("black"))
+   
+        if table_name == "dictionary" and not database.get_files.len > 2 then 
+            PasswordGenerator.init(PasswordGenerator.PASSWORDS)    
+            printb(a + "*** building dictionary attack lookup table ***".color("purple"))
+            printb(a + "this will take a minute".color("black"))
+            printb(a + "please wait".color("black"))
             
-        //     try_generate_passwords = PasswordGenerator.AllPasswords.groupBy // {md5(passwd): passwd}
-        //     print "internal 294: "+ try_generate_passwords
-        //     for group in try_generate_passwords
-        //         self.add_to(group, "dictionary()")
-        //     end for     
-        
-        // end if 
+            extra_hashes = {md5("Usand"): "Usand", md5("rixie"): "rixie"}
+            try_generate_passwords = PasswordGenerator.AllPasswords() + etra_hashes // {md5(passwd): passwd}
+            for group in try_generate_passwords
+                self.add_to(try_generate_passwords, "dictionary")
+            end for 
+        end if 
     end for 
 
     return true
@@ -424,25 +544,25 @@ end function
 
 Session.rpc.src = {}
 Session.rpc.src.scan_nw = function()
-    return "incoming_data = get_custom_object().data;_callback = @incoming_data._callback;scan_network = function();    local_router = get_router ;    lan_address_arr = get_router.devices_lan_ip;    router_addresses = [];    count = 0;    for lan_address in lan_address_arr ;        if lan_address.split("+"\.".quote+")[-1] == "+"1".quote+" then ;            router_addresses.push(lan_address);            count = count + 1;            continue;        end if ;    end for ;    ;    print ;    print "+"<b>".quote+" + "+"network devices: ".quote+" + "+"</b>".quote+";    print ;    print "+"<b>".quote+" + lan_address_arr[:-count].join(char(10) + "+"<b>".quote+");    print ;    print "+"<b>".quote+" + "+"nearby routers: ".quote+" + "+"</b>".quote+";    print ;    print "+"<b>".quote+" + router_addresses.join(char(10) + "+"<b>".quote+");    print;    return _callback.catch({"+"network_devices".quote+": lan_address_arr[:-count], "+"routers".quote+": router_addresses}, 1);end function ;return scan_network()"
+    return "c10 = char(10);c0 = char(0);tp = @typeof;string.color=function(string_split_by_space="+"black black black".quote+");list=string_split_by_space.split("+" ".quote+");  if not string_split_by_space.len then string_split_by_space="+"black black black".quote+";  colorm={"+"black".quote+":"+"<#707070>".quote+", "+"white".quote+":"+"<#BEB9E7FF>".quote+", "+"purple".quote+":"+"<#7A53F6>".quote+", "+"pink".quote+":"+"<#ED2EEA>".quote+", "+"red".quote+":"+"<color=red>".quote+", "+"dark_red".quote+":"+"<#731313>".quote+", "+"blue".quote+":"+"<color=blue>".quote+", "+"green".quote+":"+"<#2BB930>".quote+", "+"dark_green".quote+":"+"<#2C6407>".quote+", "+"cyan".quote+":"+"<#32E3EF>".quote+", "+"yellow".quote+":"+"<#D2DE0F>".quote+", "+"brown".quote+":"+"<#674D06>".quote+", "+"orange".quote+":"+"<#EA9512>".quote+"};  alpha="+"qwertyuiopasdfghjklzxcvbnm".quote+";number="+"1234567890".quote+";symbol="+"!@#$%^&*()_+-={}|[]\:;'<>?,./".quote+"+"+"".quote+""+"".quote+";  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function;  if not check_all() then return false;  while list.len < 3;list.push(list[-1]);end while;  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="+"alpha".quote+";newl=[];fp=1//;count=-1;  for char in self.values;    is_a=(tp(alpha.indexOf(char.lower)) == "+"number".quote+");is_n=(tp(number.indexOf(char)) == "+"number".quote+");is_s=(tp(symbol.indexOf(char)) == "+"number".quote+");    if char==c10 then ;newl.push(char+curr_color);continue;end if;    if is_a then curr_type="+"alpha".quote+";if is_n then curr_type="+"number".quote+";if is_s then curr_type="+"symbol".quote+";    if curr_type=="+"alpha".quote+" then;      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=coa;continue;    end if;    if curr_type=="+"number".quote+" then;      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=con;continue;    end if;    if curr_type=="+"symbol".quote+" then;      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=cos;continue;    end if;    newl.push(char);  end for;  ;  self=newl.join("+"".quote+");ctr=0;  for i in self;    if i == "+"<".quote+" then ctr=ctr+1;  end for;  for i in range(1,ctr);    self=self+"+"</color>".quote+";  end for;  return self[:-8];end function;string.c = @string.color;string.search = function(sub_string = "+"".quote+");  return tp(self.lower.indexOf(sub_string.lower)) == "+"number".quote+";;end function;;incoming_data = get_custom_object().data;_callback = @incoming_data._callback;;scan_network = function();    local_router = get_router ;    lan_address_arr = get_router.devices_lan_ip;    router_addresses = [];    count = 0;;    for lan_address in lan_address_arr ;        if lan_address.split("+"\.".quote+")[-1] == "+"1".quote+" then ;            router_addresses.push(lan_address);            count = count + 1;            continue;        end if ;    end for ;    ;    print ;    print "+"<b>".quote+" + "+"network devices: ".quote+".c("+"black".quote+") + "+"</b>".quote+";    print ;    print "+"<b>".quote+" + lan_address_arr[:(-count)][0].c("+"black black purple".quote+") + lan_address_arr[:-count].join(char(10) + "+"<b>".quote+".c("+"black black purple".quote+"));    print ;    print "+"<b>".quote+" + "+"nearby routers: ".quote+".c("+"black".quote+") + "+"</b>".quote+";    print ;    print "+"<b>".quote+" + router_addresses[0].c("+"black black purple".quote+") + char(10) + router_addresses[1:].join(char(10) + "+"<b>".quote+".c("+"black black purple".quote+"));    print;;    return _callback.catch({"+"network_devices".quote+": lan_address_arr[:-count], "+"routers".quote+": router_addresses}, 1);end function ;return scan_network()"
 end function
 Session.rpc.src.rshell = function()
     return "incoming_object = get_custom_object();incoming_data = incoming_object.data ;_callback = @incoming_data._callback;string.search = function(sub_string = "+"".quote+");  return tp(self.lower.indexOf(sub_string.lower)) == "+"number".quote+";end function;tp = @typeof;Directory = @incoming_data.Directory;host_ip_address = incoming_data.host_ip_address;send_reverse_shell_instance = function(reverse_shell_host_ip);    target_library_file = Directory.find_file(get_shell.host_computer.File("+"/".quote+"), 0, "+"metaxploit.so".quote+");    if not target_library_file then return _callback.catch("+"[blbx][rshell][err]: cannot find metaxploit.so on machine...".quote+");    metaxploit = include_lib(target_library_file.path);    try_rshell_client = metaxploit.rshell_client(reverse_shell_host_ip, 1222, c0);    if tp(try_rshell_client) == "+"string".quote+" then return _callback.catch("+"[blbx][rshell][err]: ".quote+" + try_rshell_client);    return _callback.catch(try_rshell_client, 1);end function ;result = send_reverse_shell_instance(host_ip_address).data;incoming_object.data = {"+"rshell".quote+": result};return incoming_object"
 end function 
 Session.rpc.src.escalate = function()
-    return "incoming_data = get_custom_object().data;_callback = @incoming_data._callback;username = incoming_data.username;password = incoming_data.password;dictionary = incoming_data.dictionary ;escalate = function(_user, _dict, _pass = 0);    if _pass then ;        try_shell_login = get_shell(_user, _pass);        if typeof(try_shell_login) == "+"null".quote+" then return _callback.catch("+"[blbx][esca][err]: shell instance login attempt failed...".quote+");        ;        return _callback.catch(try_shell_login, 1);    end if ;    found = false ;    for password in _dict.values ;        try_shell_login = get_shell(_user, password);        if typeof(try_shell_login) == "+"null".quote+" then continue ;        found = try_shell_login;        break;    end for ;    if not found then return _callback.catch("+"[blbx][esca][err]: dictionary attack failed. password not found...".quote+", 0)  ;    return _callback.catch(found, 1);end function ;return escalate(username, dictionary, password)"
+    return "c10 = char(10);c0 = char(0);tp = @typeof;incoming_object = get_custom_object();incoming_data = incoming_object.data ;string.color=function(string_split_by_space="+"black black black".quote+");list=string_split_by_space.split("+" ".quote+");  if not string_split_by_space.len then string_split_by_space="+"black black black".quote+";  colorm={"+"black".quote+":"+"<#707070>".quote+", "+"white".quote+":"+"<#BEB9E7FF>".quote+", "+"purple".quote+":"+"<#7A53F6>".quote+", "+"pink".quote+":"+"<#ED2EEA>".quote+", "+"red".quote+":"+"<color=red>".quote+", "+"dark_red".quote+":"+"<#731313>".quote+", "+"blue".quote+":"+"<color=blue>".quote+", "+"green".quote+":"+"<#2BB930>".quote+", "+"dark_green".quote+":"+"<#2C6407>".quote+", "+"cyan".quote+":"+"<#32E3EF>".quote+", "+"yellow".quote+":"+"<#D2DE0F>".quote+", "+"brown".quote+":"+"<#674D06>".quote+", "+"orange".quote+":"+"<#EA9512>".quote+"};  alpha="+"qwertyuiopasdfghjklzxcvbnm".quote+";number="+"1234567890".quote+";symbol="+"!@#$%^&*()_+-={}|[]\:;'<>?,./".quote+"+"+"".quote+""+"".quote+";  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function;  if not check_all() then return false;  while list.len < 3;list.push(list[-1]);end while;  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="+"alpha".quote+";newl=[];fp=1//;count=-1;  for char in self.values;    is_a=(tp(alpha.indexOf(char.lower)) == "+"number".quote+");is_n=(tp(number.indexOf(char)) == "+"number".quote+");is_s=(tp(symbol.indexOf(char)) == "+"number".quote+");    if char==c10 then ;newl.push(char+curr_color);continue;end if;    if is_a then curr_type="+"alpha".quote+";if is_n then curr_type="+"number".quote+";if is_s then curr_type="+"symbol".quote+";    if curr_type=="+"alpha".quote+" then;      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=coa;continue;    end if;    if curr_type=="+"number".quote+" then;      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=con;continue;    end if;    if curr_type=="+"symbol".quote+" then;      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=cos;continue;    end if;    newl.push(char);  end for;  ;  self=newl.join("+"".quote+");ctr=0;  for i in self;    if i == "+"<".quote+" then ctr=ctr+1;  end for;  for i in range(1,ctr);    self=self+"+"</color>".quote+";  end for;  return self;end function;string.c = @string.color;;list.clean=function(example_list);  newl=[];  if not tp(example_list) == "+"list".quote+" then example_list = [example_list];  for i in self;    if tp(example_list.indexOf(i)) == "+"number".quote+" then continue;    newl.push(i);  end for;  self=newl;  return self;end function;;incoming_object = get_custom_object();incoming_data = incoming_object.data ;_callback = @incoming_data._callback;username = incoming_data.username;password = incoming_data.password;dictionary = incoming_data.dictionary ;b = "+"<b>".quote+";a = "+"<align=center>".quote+";escalate = function(_user, _dict, _pass = 0);    print b + ("+"*** attempting dictionary attack ***".quote+").c("+"black black purple".quote+") + c0;    print b + ("+"*** please wait ***".quote+").c("+"black".quote+") + c0;    wait(2);;    if _pass then ;        try_shell_login = get_shell(_user, _pass);        if typeof(try_shell_login) != "+"shell".quote+" then return _callback.catch("+"[blbx][esca][err]: shell instance login attempt failed...".quote+");        ;        return _callback.catch(try_shell_login, 1);    end if ;;    found = false ;    count = 0;    limit_check = 0;    LIMIT = 200;    progress_bar_history = [];    for password in _dict;        limit_check = limit_check + 1;        password = password.values.clean(["+"".quote+""+"".quote+"]).join("+"".quote+");        try_shell_login = get_shell(_user, password);        if limit_check == LIMIT then ;          limit_check = 0;          count = count + 1;          progress_bar = (a + _callback.loading_key_frame(((count * 200) / _dict.values.len))) // 341,000 passwords in total;          if tp(progress_bar_history.indexOf(progress_bar)) != "+"number".quote+" then ;            clear_screen;            progress_bar_history.push(progress_bar);            print(b + progress_bar);          end if ;        end if ;        if typeof(try_shell_login) == "+"null".quote+" then continue ;        print ;        print(b + a + ("+"*** password found for user '".quote+" + _user + "+"'@'".quote+" + password + "+"' ***".quote+").c("+"black black purple".quote+") + c0);        print          ;        found = try_shell_login;        break;    end for ;    if not found then return _callback.catch("+"[blbx][esca][err]: dictionary attack failed. password not found...".quote+")  ;    return _callback.catch(found, 1);end function;;escalation_result = escalate(username, dictionary, password);;incoming_object.data = escalation_result;return incoming_object;"
 end function 
 Session.rpc.src.dictionary = function()
     return "incoming_data = get_custom_object().data;_callback = @incoming_data._callback;username = incoming_data.username;dictionary = incoming_data.dictionary;dictionary_attack = function(_user, _dict);    found = false ;    for password in _dict.values ;        try_shell_login = get_shell(_user, password);        if typeof(try_shell_login) == "+"null".quote+" then continue ;        found = password;        break;    end for ;    if not found then return _callback.catch("+"[blbx][dict][err]: dictionary attack failed. password not found...".quote+", 0)  ;    print "+"<b>password found: ".quote+" + found + "+"</b>".quote+";    return _callback.catch(found, 1);end function ;return dictionary_attack(username, dictionary)"
 end function 
 Session.rpc.src.bounce = function()
-    return "c10 = char(10);c0 = char(0);incoming_object = get_custom_object();incoming_data = incoming_object.data ;string.color=function(string_split_by_space="+"black black black".quote+");list=string_split_by_space.split("+" ".quote+");  if not string_split_by_space.len then string_split_by_space="+"black black black".quote+";  colorm={"+"black".quote+":"+"<#707070>".quote+", "+"white".quote+":"+"<#BEB9E7FF>".quote+", "+"purple".quote+":"+"<#7A53F6>".quote+", "+"pink".quote+":"+"<#ED2EEA>".quote+", "+"red".quote+":"+"<color=red>".quote+", "+"dark_red".quote+":"+"<#731313>".quote+", "+"blue".quote+":"+"<color=blue>".quote+", "+"green".quote+":"+"<#2BB930>".quote+", "+"dark_green".quote+":"+"<#2C6407>".quote+", "+"cyan".quote+":"+"<#32E3EF>".quote+", "+"yellow".quote+":"+"<#D2DE0F>".quote+", "+"brown".quote+":"+"<#674D06>".quote+", "+"orange".quote+":"+"<#EA9512>".quote+"};  alpha="+"qwertyuiopasdfghjklzxcvbnm".quote+";number="+"1234567890".quote+";symbol="+"!@#$%^&*()_+-={}|[]\:;'<>?,./".quote+"+"+"".quote+""+"".quote+";  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function;  if not check_all() then return false;  while list.len < 3;list.push(list[-1]);end while;  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="+"alpha".quote+";newl=[];fp=1//;count=-1;  for char in self.values;    is_a=(tp(alpha.indexOf(char.lower)) == "+"number".quote+");is_n=(tp(number.indexOf(char)) == "+"number".quote+");is_s=(tp(symbol.indexOf(char)) == "+"number".quote+");    if char==c10 then ;newl.push(char+curr_color);continue;end if;    if is_a then curr_type="+"alpha".quote+";if is_n then curr_type="+"number".quote+";if is_s then curr_type="+"symbol".quote+";    if curr_type=="+"alpha".quote+" then;      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=coa;continue;    end if;    if curr_type=="+"number".quote+" then;      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=con;continue;    end if;    if curr_type=="+"symbol".quote+" then;      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=cos;continue;    end if;    newl.push(char);  end for;  ;  self=newl.join("+"".quote+");ctr=0;  for i in self;    if i == "+"<".quote+" then ctr=ctr+1;  end for;  for i in range(1,ctr);    self=self+"+"</color>".quote+";  end for;  return self;end function;string.c = @string.color;string.search = function(sub_string = "+"".quote+");  return tp(self.lower.indexOf(sub_string.lower)) == "+"number".quote+";;end function;list.remove_repeats=function();  newl=[];  for i in self;    if tp(newl.indexOf(i)) != "+"number".quote+" then newl.push(i);  end for;  self=newl;  return self;end function;list.clean=function(example_list);  newl=[];  for i in self;    if tp(example_list.indexOf(i)) == "+"number".quote+" then continue;    newl.push(i);  end for;  self=newl;  return self;end function;list.mass_concat = function();  result = [];  for sub_arr in self ;    result = result + sub_arr;  end for ;  return result;end function ;_callback = @incoming_data._callback;Directory = @incoming_data.Directory;Session = @incoming_data.Session;Exploit = @incoming_data.Exploit;library_path = @incoming_data.library_path;database = @incoming_data.database;lan_address = @incoming_data.lan_address;notify = @incoming_data.notify;hide_ip = @incoming_data.hide_ip;tp = @typeof;;memory_arr = [];metaxploit = Exploit.module.get_local_lib("+"metaxploit.so".quote+")//;;library = metaxploit.load(library_path);if not Exploit.module.library.get_metax() then return _callback.catch("+"[expl][attack][err]: metaxploit library not found on machine...".quote+");if tp(Session.machine.ip.get_lan_address_arr().indexOf(Session.machine.ip.get_lan_address())) != "+"number".quote+" then Session.machine.ip.add_lan_address(lan_address);;exploit_map = Exploit.module.parse_exploits(library, database);memory_address_arr = exploit_map.data.indexes;;saved_exploits = [];captured_exploits = [];for address in memory_address_arr ;  captured_exploits = Exploit.module.run_exploits(exploit_map.data[address], address, lan_address, library, lan_address, database, 0) //change_password json;end for ;;;print(notify(("+"bounce attack on ".quote+" + ("+"'".quote+" + hide_ip(lan_address) + "+"'".quote+").c("+"black black white".quote+") + "+" completed.".quote+")) + c0);;incoming_object.data = { "+"Session".quote+": Session, "+"Exploit".quote+": Exploit, "+"exploit_arr".quote+": captured_exploits, "+"library".quote+": library };;return incoming_object"
+    return "c10 = char(10);c0 = char(0);incoming_object = get_custom_object();incoming_data = incoming_object.data ;string.color=function(string_split_by_space="+"black black black".quote+");list=string_split_by_space.split("+" ".quote+");  if not string_split_by_space.len then string_split_by_space="+"black black black".quote+";  colorm={"+"black".quote+":"+"<#707070>".quote+", "+"white".quote+":"+"<#BEB9E7FF>".quote+", "+"purple".quote+":"+"<#7A53F6>".quote+", "+"pink".quote+":"+"<#ED2EEA>".quote+", "+"red".quote+":"+"<color=red>".quote+", "+"dark_red".quote+":"+"<#731313>".quote+", "+"blue".quote+":"+"<color=blue>".quote+", "+"green".quote+":"+"<#2BB930>".quote+", "+"dark_green".quote+":"+"<#2C6407>".quote+", "+"cyan".quote+":"+"<#32E3EF>".quote+", "+"yellow".quote+":"+"<#D2DE0F>".quote+", "+"brown".quote+":"+"<#674D06>".quote+", "+"orange".quote+":"+"<#EA9512>".quote+"};  alpha="+"qwertyuiopasdfghjklzxcvbnm".quote+";number="+"1234567890".quote+";symbol="+"!@#$%^&*()_+-={}|[]\:;'<>?,./".quote+"+"+"".quote+""+"".quote+";  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function;  if not check_all() then return false;  while list.len < 3;list.push(list[-1]);end while;  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="+"alpha".quote+";newl=[];fp=1//;count=-1;  for char in self.values;    is_a=(tp(alpha.indexOf(char.lower)) == "+"number".quote+");is_n=(tp(number.indexOf(char)) == "+"number".quote+");is_s=(tp(symbol.indexOf(char)) == "+"number".quote+");    if char==c10 then ;newl.push(char+curr_color);continue;end if;    if is_a then curr_type="+"alpha".quote+";if is_n then curr_type="+"number".quote+";if is_s then curr_type="+"symbol".quote+";    if curr_type=="+"alpha".quote+" then;      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=coa;continue;    end if;    if curr_type=="+"number".quote+" then;      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=con;continue;    end if;    if curr_type=="+"symbol".quote+" then;      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="+"".quote+";fp=0;      newl.push(curr_color+char);curr_color=cos;continue;    end if;    newl.push(char);  end for;  ;  self=newl.join("+"".quote+");ctr=0;  for i in self;    if i == "+"<".quote+" then ctr=ctr+1;  end for;  for i in range(1,ctr);    self=self+"+"</color>".quote+";  end for;  return self;end function;string.c = @string.color;string.search = function(sub_string = "+"".quote+");  return tp(self.lower.indexOf(sub_string.lower)) == "+"number".quote+";;end function;list.remove_repeats=function();  newl=[];  for i in self;    if tp(newl.indexOf(i)) != "+"number".quote+" then newl.push(i);  end for;  self=newl;  return self;end function;list.clean=function(example_list);  newl=[];  for i in self;    if tp(example_list.indexOf(i)) == "+"number".quote+" then continue;    newl.push(i);  end for;  self=newl;  return self;end function;list.mass_concat = function();  result = [];  for sub_arr in self ;    result = result + sub_arr;  end for ;  return result;end function ;_callback = @incoming_data._callback;Directory = @incoming_data.Directory;Session = @incoming_data.Session;Exploit = @incoming_data.Exploit;library_path = @incoming_data.library_path;database = @incoming_data.database;lan_address = @incoming_data.lan_address;notify = @incoming_data.notify;hide_ip = @incoming_data.hide_ip;tp = @typeof;JSON = @incoming_data.JSON;;memory_arr = [];metaxploit = Exploit.module.get_local_lib("+"metaxploit.so".quote+")//;;library = metaxploit.load(library_path);if not Exploit.module.library.get_metax() then return _callback.catch("+"[expl][attack][err]: metaxploit library not found on machine...".quote+");if tp(Session.machine.ip.get_lan_address_arr().indexOf(Session.machine.ip.get_lan_address())) != "+"number".quote+" then Session.machine.ip.add_lan_address(lan_address);;exploit_map = Exploit.module.parse_exploits(library, database);memory_address_arr = exploit_map.data.indexes;;saved_exploits = [];captured_exploits = [];for address in memory_address_arr ;  captured_exploits = Exploit.module.run_exploits(exploit_map.data[address], address, lan_address, library, lan_address, database, 0) //change_password json;end for ;;;print(notify(("+"bounce attack on ".quote+" + ("+"'".quote+" + hide_ip(lan_address) + "+"'".quote+").c("+"black black white".quote+") + "+" completed.".quote+")) + c0);;incoming_object.data = { "+"Session".quote+": Session, "+"Exploit".quote+": Exploit, "+"exploit_arr".quote+": captured_exploits, "+"library".quote+": library };;return incoming_object"
 end function
 
 Session.rpc.data = {} // organizes RPC data for sending and recieving
 
 Session.rpc.data.catch = function()
-    return _callback.catch(get_custom_object(), 1)
+    return get_custom_object()
 end function
 
 Session.rpc.data.send = function(shell_instance, program, program_prompt = "", data = {}, delete = 0)
@@ -556,27 +676,38 @@ Session.parse_object = function(object_list, lan_address, as_user = 0, return_al
         return false 
     end function 
     
+    username_array = []
+    
     for object_arr in object_list
-        //if not tp(object_arr) == "map" or (tp(object_arr) == "map" and object_arr.hasIndex("value")) then continue
-        //if not object_arr.len then continue 
         object = object_arr[0]
         username = object_arr[1]
+        username_array.push(username)
         if not username then username = "unknown"
         lanip = object_arr[2]
 
         if lanip != lan_address then continue
         
         if as_user then 
-            if username.lower.search(as_user.lower) then user_dict.usr.push(object)
-            continue
+            if username.lower.search(as_user.lower) then 
+                user_dict.usr.push(object)
+                continue
+            end if
         end if
     
-        if username == "root" then user_dict.root.push([object, username])
-        if username == "guest" then user_dict.guest.push([object, username])
-        if username == "unknown" then user_dict.unknown.push([object, username])
+        if username == "root" then 
+            user_dict.root.push([object, username])
+            continue
+        end if
+        if username == "guest" then
+            user_dict.guest.push([object, username])
+            continue 
+        end if 
+        if username == "unknown" then
+            user_dict.unknown.push([object, username])
+            continue 
+        end if 
         
-        
-        if not tp(user_dict.usr.indexOf(username)) == "number" then user_dict.usr.push([object, username])
+        if not tp(username_array.indexOf(username)) == "number" then user_dict.usr.push([object, username])
     end for 
 
     if not as_user and lan_address and return_all then return user_dict.root + user_dict.guest + user_dict.unknown + user_dict.usr
@@ -589,13 +720,13 @@ Session.parse_object = function(object_list, lan_address, as_user = 0, return_al
 
     if ((as_user and lan_address) and not return_all) then 
         if user_dict.root.len > 0 and as_user == "root" then return user_dict.root[0][0]
-        found = ""
+        found = false
         if user_dict.usr.len > 0 and as_user then
             for user in user_dict.usr 
-                if user[1].lower.search(as_user.lower) then found = user[1]
+                if user[1].lower.search(as_user.lower) then found = user[0]
             end for 
         end if 
-        if found.len then return found 
+        if found then return found 
         if user_dict.unknown.len > 0 then return user_dict.unknown[0][0]
         if user_dict.guest.len > 0 then return user_dict.guest[0][0]
     end if 
@@ -603,24 +734,14 @@ Session.parse_object = function(object_list, lan_address, as_user = 0, return_al
     return false
 end function
 
-Session.is_empty = function(object_name)
-    if not self.object[object_name].list.len then return true 
+Session.get_object_arr = function(object_type)
+    return self.object[object_type].list
+end function
+
+Session.is_empty = function(object_type)
+    if not self.get_object_arr(object_type).len then return true 
     return false 
 end function 
-
-Session.get_object_arr = function(object_type)
-    return self.object[object_type]
-end function
-
-Session.borrow = function(object_name, lan_address, as_user = 0)
-    if self.is_empty(object_name) then return false
-  
-    object = self.parse_object(Exploit.device.get(lan_address)[object_name + "s"], lan_address, as_user)
-    if not object then return false 
-    
-    return object
-end function
-
 
 Session.get_user = function(object)
     if tp(object) == "shell" then object = object.host_computer 
@@ -642,10 +763,16 @@ Session.get_user = function(object)
     return "unknown"
 end function
 
-Session.add = function(object, lanip)
-    self.object[tp(object)].list.push([object, self.get_user(object), lanip, tp(object)])
-    if tp(object) == "shell" then return self.add(object.host_computer, lanip)
-    if tp(object) == "computer" then return self.add(object.File("/"), lanip)
+Session.add = function(object, lan_address)
+    if tp(object) == "file" then 
+        while object.path != "/"
+            object = object.parent
+        end while 
+    end if
+    self.object[tp(object)].list.push([object, self.get_user(object), lan_address, tp(object)])
+    if tp(object) == "shell" or tp(object) == "rshell" then return self.add(object.host_computer, lan_address)
+    if tp(object) == "computer" then return self.add(object.File("/"), lan_address)
+    return true
 end function 
 
 Session.wipe = function()
@@ -699,10 +826,10 @@ Exploit.device.user_map = {}
 Exploit.device.serialized_tree = ""
 
 Exploit.device.wipe = function()
-    self.device.tree = {}
-    self.device.current = {}
-    self.device.user_map = {}
-    self.device.serialized_tree = ""
+    self.tree = {}
+    self.current = {}
+    self.user_map = {}
+    self.serialized_tree = ""
 end function
 
 Exploit.device.get_current = function()
@@ -720,12 +847,20 @@ Exploit.device.add = function(object, lan_address)
         self.tree[lan_address].shells.push([object, Session.get_user(object), lan_address, tp(object)])
         return self.add(object.host_computer, lan_address)
     end if 
-    if tp(object) == "rshell" then self.tree[lan_address].shells.push([object, Session.get_user(object), lan_address, tp(object)])
+    if tp(object) == "rshell" then 
+        self.tree[lan_address].shells.push([object, Session.get_user(object), lan_address, tp(object)])
+        return self.add(object.host_computer, lan_address)
+    end if
     if tp(object) == "computer" then 
         self.tree[lan_address].computers.push([object, Session.get_user(object), lan_address, tp(object)])
         return self.add(object.File("/"), lan_address)
     end if 
-    if tp(object) == "file" then self.tree[lan_address].files.push([object, Session.get_user(object), lan_address, tp(object)])
+    if tp(object) == "file" then 
+        while object.path != "/"
+            object = object.parent
+        end while 
+        self.tree[lan_address].files.push([object, Session.get_user(object), lan_address, tp(object)])
+    end if
 
     return true
 end function 
@@ -734,10 +869,30 @@ Exploit.device.has = function(lan_address)
     return tp(self.tree.indexes.indexOf(lan_address)) == "number"
 end function
 
+
 Exploit.device.get = function(lan_address)
     if not self.has(lan_address) then return false 
     return self.tree[lan_address]
 end function 
+
+Exploit.device.has_object = function(lan_address, object_type)
+    if not self.has(lan_address) then return false 
+    if not self.get(lan_address)[object_type + "s"].len then return false 
+    return true 
+end function
+
+Exploit.device.get_object = function(lan_address, object_type)
+    if not self.has_object(lan_address, object_type) then return false 
+    return Session.parse_object(self.get(lan_address)[object_type + "s"], lan_address)
+end function 
+
+Session.borrow = function(object_type, lan_address, as_user = 0)
+    object = Exploit.device.get_object(lan_address, object_type)
+    if not object then return false 
+    
+    return object
+end function
+
 
 Exploit.device.add_user = function(lan_address, username)
     if not self.user_map.hasIndex(lan_address) then self.user_map[lan_address] = []
@@ -796,6 +951,7 @@ Exploit.device.show_tree = function()
     add_line
     for lan_address in self.user_map.indexes
         printb(bar(30))
+        add_line
         printb("  lan address: ".c("black") + lan_address.c("purple"))
         add_line
         for user in self.user_map[lan_address]
@@ -901,6 +1057,7 @@ Exploit.module.add_exploit = function(database_entry, library, saved_database = 
         for memory_address in entry.value.indexes
             if not saved_database[library_name][library_version].hasIndex(memory_address) then saved_database[library_name][library_version][memory_address] = []
             saved_database[library_name][library_version][memory_address] = (saved_database[library_name][library_version][memory_address] + entry.value[memory_address]).remove_repeats
+            _callback.local_debug("<color=red>add_exploit: checking additions")
         end for 
 
     end for 
@@ -928,22 +1085,9 @@ end function
 
 Exploit.module.allocate = function(object, lan_address, hide_objects = 0)
     if Exploit.has_object(object) then return false
-    if tp(["shell", "computer", "file"].indexOf(tp(object)) == "number") and not hide_objects then printb(tp(object).c("purple"))
-    if tp(object) == "shell" or tp(object) == "rshell" then 
-        Session.add(object, lan_address)
-        Session.add(object.host_computer, lan_address)
-    end if 
-    if tp(object) == "computer" then 
-        Session.add(object, lan_address)
-        Session.add(object.File("/"), lan_address)
-    end if 
-    if tp(object) == "file" then 
-        while object.path != "/" 
-            object = object.parent 
-        end while 
-        Session.add(object, lan_address)
-    end if 
-    return true
+    if tp(["shell", "rshell", "computer", "file"].indexOf(tp(object))) != "number" then return false 
+    printb((tp(object)).c("purple"))
+    return Session.add(object, lan_address)
 end function
 
 
@@ -970,8 +1114,7 @@ Exploit.module.parse_exploits = function(library, database = 0)
                 end for 
 
                 if exploit_map.len then return _callback.catch(exploit_map, 1)
-            end if 
-    
+            end if
         end if
         print
         printb(("[expl][attack][notif]: library " + library.lib_name + " v" + library.version + " not found in database...").c("black black purple"))
@@ -994,20 +1137,12 @@ Exploit.module.parse_exploits = function(library, database = 0)
     return _callback.catch(exploit_map, 1)
 end function 
 
-Exploit.module.run_exploits = function(payload_arr = [], memory_address, lan_address, library, change_password = 0, database = 0, set_db = 1)
+Exploit.module.run_exploits = function(payload_arr = [], database, memory_address, lan_address, library, change_password = 0, database = 0, set_db = 1)
     if not payload_arr.len then return false 
     
-    if not database then database = Session.db.parse("exploit")
     if not database then database = {}
     exploit_arr = []
-    _callback.debug(payload_arr, "internal payload_arr", 1004)
     for payload in payload_arr
-        //_callback.debug(payload, "internal", 1006)
-        //_callback.debug(change_password, "internal cgp", 1006)
-        print change_password
-        print payload
-        _callback.debug(payload, "internal payload", 1007)
-        //_callback.debug(memory_address, "internal mem_addr", 1008)
         if change_password then object = library.overflow(memory_address, payload, change_password) else object = library.overflow(memory_address, payload)
         if tp(object) == "null" then continue 
         if tp(object) == "number" then 
@@ -1074,15 +1209,15 @@ Exploit.attack = function(lan_address, change_password = 0, third_arg)
     if tp(self.module.library.get_metax().rshell_server) != "list" then rshell_arr = [] else rshell_arr = Exploit.module.library.get_metax().rshell_server 
 
     exploit_map = self.module.parse_exploits(library)
-    
+    saved_database = Session.db.parse("exploits")
     memory_address_arr = exploit_map.data.indexes
 
     for address in memory_address_arr 
         _callback.debug(third_arg, "internal".c("purple"), 1080)
-        self.module.run_exploits(exploit_map.data[address], address, lan_address, library, third_arg) //change_password json
+        self.module.run_exploits(exploit_map.data[address], saved_database, address, lan_address, library, third_arg) //change_password json
     end for 
-    print notify("attack on " + ("'" + hide_ip(Session.machine.ip.get_pub_address_arr()[-1])+ "'").c("black black white") + " @ " + ("'" + hide_ip(lan_address) + "'").c("black black white") + " completed.")+c0
-    
+    printb(a + ("*** attack on '" + hide_ip(Session.machine.ip.get_pub_address_arr()[-1]) + "@" + hide_ip(lan_address) + "' completed ***").c("purple"))
+
     return _callback.catch("", 1)
 end function
 
@@ -1126,8 +1261,8 @@ end function
 Usage.init = function()
     //  {"cmd_name": "ls", "usage_arr": [" clear ", " cls ", " cs "], "desc": "clears terminal screen and displays next input.", "long": "clear", "short": "cls | cs"}
     linux_cmd_arr = [{"cmd_name": "clear", "usage_arr": [" clear ", " cls ", " cs "], "desc": "clears terminal screen and displays next input.", "long": "clear", "short": "cls | cs"}, {"cmd_name": "exit", "usage_arr": [" exit "], "desc": "leaves the blbx process and exits program.", "long": "exit", "short": "-q"}, {"cmd_name": "ls", "usage_arr": [" ls [<file_path> | <file_name>]"], "desc": "displays files and directories found in a directory.", "long": "ls", "short": ""}, {"cmd_name": "cd", "usage_arr": [" cd [<file_path> | <file_name>] ", " cd ... ", " cd .. ", " cd . " , " cd "], "desc": "navigates shell instance to directory.", "long": "cd", "short": ""}, {"cmd_name": "cat", "usage_arr": [" cat [<file_name> | <file_path>] "], "desc": "displays the contents of a text file on terminal.", "long": "cat", "short": ""},  {"cmd_name": "rm", "usage_arr": [" rm [<file_name> | <file_path>] "], "desc": "removes file or directory from machine.", "long": "rm", "short": ""}, {"cmd_name": "ifconfig", "usage_arr": [" ifconfig ", " ifconfig -help "], "desc": "clears terminal screen and displays next input.", "long": "ifconfig", "short": "ifc"}]
-    custom_cmd_arr = [{"cmd_name": "find", "usage_arr": [" find [<file_name> | <file_path>] OPTION: -content "], "desc": "recursively finds a file on machine and displays its path and content by option.", "long": "find", "short": "--f"},  {"cmd_name": "apt", "usage_arr": [" apt [-upgrade | -upg] ", " apt [-update | -upd] ", " apt [-addrepo | -ar] ", " apt [-delrepo | -dr] ", " apt [-search | -sch] ", " apt [-show | -shw] ", " apt [-install | -i] "], "desc": "handles repository commands for local machine.", "long": "apt", "short": ""},  {"cmd_name": "attack", "usage_arr": [" attack <ip_address> OPTION: -port[<port_number>, ...] | -p[...] OPTION: [-scan | -s] -cgp -fw "], "desc": "attacks target ip address on all ports unless specified. also attacks router and changes password and bypasses firewalls.", "long": "attack", "short": "-atk"},  {"cmd_name": "rat", "usage_arr": [" rat [-rshell | -rsh] ", " rat [-scan_nw | -snw] ", " rat [-dict | -d] ", " rat [-esc | -e] ", " rat -bounce[<lan_address>, <library_name>] | -b[...] ", " rat -escalate[<as_user>, <password>] "], "desc": "rat exploit that remotely runs scripts to reverse shell, scan the network, dictionary attack, or escalate permissions.", "long": "rat", "short": ""}, {"cmd_name": "connect", "usage_arr": [" connect <lan_address> OPTION: <as_user> "], "desc": "initializes the emulated remote shell instance without starting a shell. now you can use linux and exploiting commands on the remote victim.", "long": "connect", "short": "con"}, {"cmd_name": "sweep", "usage_arr": [" sweep <target_amount> OPTION: -port[<port_number>, ...] "], "desc": "finds random ip addresses to attack or investigate.", "long": "sweep", "short": "sw"}, {"cmd_name": "nmap", "usage_arr": [" nmap <ip_address> ", " nmap <domain_address> "], "desc": "displays available open and closed ports on a target ip address.", "long": "nmap", "short": ""}, {"cmd_name": "disconnect", "usage_arr": [" disconnect "], "desc": "exits emulated shell connection and starts operating with local machine objects.", "long": "disconnect", "short": "dc"}, {"cmd_name": "dia", "usage_arr": [" dia -setup ", " dia -add_bot ", " dia -add_bridge ", " dia -monitor ", "dia -sniff[<ip_address>, ...]", " dia -decrypt ", " dia expand <bot_amount> ", " dia visit -bridge[<ip_address>, <lan_address>] ", " dia visit -bot[<ip_address>, <lan_address>] ", "  "], "desc": "clears terminal screen and displays next input.", "long": "clear", "short": "cls | cs"}]
-    syntax_cmd_arr=  [{"cmd_name": "syntax_assign", "usage_arr": [" variable_name = <variable> ", " variable = <command> ",  " variable = <literal> ",  " variable = <ip_address> "], "desc": "environment varables allow commands to access data that is saved in runtime state and. it is recovered on startup, and saved on every update do the database.", "long": "=", "short": ""}]
+    custom_cmd_arr = [{"cmd_name": "find", "usage_arr": [" find [<file_name> | <file_path>] OPTION: -content "], "desc": "recursively finds a file on machine and displays its path and content by option.", "long": "find", "short": "--f"},  {"cmd_name": "apt", "usage_arr": [" apt [-upgrade | -upg] ", " apt [-update | -upd] ", " apt [-addrepo | -ar] ", " apt [-delrepo | -dr] ", " apt [-search | -sch] ", " apt [-show | -shw] ", " apt [-install | -i] "], "desc": "handles repository commands for local machine.", "long": "apt", "short": ""},  {"cmd_name": "attack", "usage_arr": [" attack <ip_address> OPTION: -port[<port_number>, ...] | -p[...] OPTION: [-scan | -s] -cgp -fw "], "desc": "attacks target ip address on all ports unless specified. also attacks router and changes password and bypasses firewalls.", "long": "attack", "short": "-atk"},  {"cmd_name": "rat", "usage_arr": [" rat [-rshell | -rsh] ", " rat [-scan_nw | -snw] ", " rat [-dict | -d] ", " rat [-esc | -e] ", " rat -bounce[<lan_address>, <library_name>] | -b[...] ", " rat -escalate[<as_user>, <password>] "], "desc": "rat exploit that remotely runs scripts to reverse shell, scan the network, dictionary attack, or escalate permissions.", "long": "rat", "short": ""}, {"cmd_name": "connect", "usage_arr": [" connect <lan_address> OPTION: <as_user> "], "desc": "initializes the emulated remote shell instance without starting a shell. now you can use linux and exploiting commands on the remote victim.", "long": "connect", "short": "con"}, {"cmd_name": "sweep", "usage_arr": [" sweep <target_amount> OPTION: -port[<port_number>, ...] "], "desc": "finds random ip addresses to attack or investigate.", "long": "sweep", "short": "sw"}, {"cmd_name": "nmap", "usage_arr": [" nmap <ip_address> ", " nmap <domain_address> "], "desc": "displays available open and closed ports on a target ip address.", "long": "nmap", "short": ""}, {"cmd_name": "disconnect", "usage_arr": [" disconnect "], "desc": "exits emulated shell connection and starts operating with local machine objects.", "long": "disconnect", "short": "dc"}, {"cmd_name": "dia", "usage_arr": [" dia -setup ", " dia -add_bot ", " dia -add_bridge ", " dia -monitor ", "dia -sniff[<ip_address>, ...]", " dia -decrypt ", " dia expand <bot_amount> ", " dia visit -bridge[<ip_address>, <lan_address>] ", " dia visit -bot[<ip_address>, <lan_address>] ", "  "], "desc": "clears terminal screen and displays next input.", "long": "clear", "short": "cls | cs"}, {"cmd_name": "load", "usage_arr": [" load [-dictionary | -dict | -d] ", " load [-exploit | -expl | -e] ", " load [-botnet | -bot | -b] "], "desc": "parses and loads large data sets for use by other commands. this command is pipe-applicable.", "long": "load", "short": "ld"}, {"cmd_name": "creds", "usage_arr": [" creds [-passwd | -pass | -p] ", " creds [-bank | -b] ", " creds [-mail | -m] "], "desc": "finds the corresponding text files and lists. their contents. piping is allowed.", "long": "creds", "short": "cred"}, {"cmd_name": "decipher", "usage_arr": [" decipher [hash | 'hash'] OPTION: [-scan | -s]"], "desc": "looks for md5 in the [blbx] lookup table, called [blt], or scans the hash to decipher it.", "long": "decipher", "short": "dec"}]
+    syntax_cmd_arr=  [{"cmd_name": "syntax_assign", "usage_arr": [" variable = <variable_name> ", " variable = <command> ",  " variable = <literal> ",  " variable = <ip_address> "], "desc": "environment varables allow commands to access data that is saved in runtime state and. it is recovered on startup, and saved on every update do the database.", "long": "=", "short": ""}]
 
     cmd_arr = linux_cmd_arr + custom_cmd_arr + syntax_cmd_arr
 
@@ -1140,56 +1275,94 @@ end function
 
 Wifi = {}
 Wifi.connect = function()
-    wifi_info=Directory.find_file(get_shell.host_computer.File("/"), 0, "Gift.txt")
-    co=Exploit.module.library.get_crypto();co.airmon("start", "wlan0")
-    if tp(co) == "null" then exit "*** missing 'crypto.so' library. wifi connection failed ***".color("red")
-    try=0
-    if tp(wifi_info) == "file" and wifi_info.get_content.split(c10)[0] == "Wifi access:" then
-    bssid=wifi_info.get_content.split(c10)[3]
-    essid=wifi_info.get_content.split(c10)[4]
-    passwd=wifi_info.get_content.split(c10)[5].split(": ")[1]
-    try=get_shell.host_computer.connect_wifi("wlan0", bssid, essid, passwd)
-    print notify("gift.txt found. attempting connection")+c0
-    if try == 1 then ;print notify("connected to '"+essid+"'.", "!")+c0;return true;end if
-    if tp(try) == "string" then ;print notify(try.lower.color("black black white"), "?")+c0;end if
-    if tp(try) == "null" then ;print notify(("failed to connect to '"+essid+"'").color("black black white"), "?")+c0;end if
+    wifi_info=Directory.find_file(get_shell.host_computer.File("/"), 0, "gift.txt")
+    crypto=Exploit.module.library.get_crypto();crypto.airmon("start", "wlan0")
+    if tp(crypto) == "null" then 
+        printb("* * missing 'crypto.so' library. wifi connection failed * *".color("black"))
+        printb("* * you've been bricked. not a problem. hop on discord! * *".c("black black purple"))
+        printb("*** see <u>https://discord.greyhack.gg</u> ***".c("black black purple"))
+        return false
     end if
-    if not try then ;print notify("'Gift.txt' not found, proceeding...", "!")+c0;wait(2);end if
-
-    bl=[];el=[];pl=[]
+    
+    try_connection = false
+    if tp(wifi_info) == "file" and wifi_info.get_content.split(c10)[0] == "Wifi access:" then
+        bssid = wifi_info.get_content.split(c10)[3]
+        essid = wifi_info.get_content.split(c10)[4]
+        passwd = wifi_info.get_content.split(c10)[5].split(": ")[1]
+        try_connection = get_shell.host_computer.connect_wifi("wlan0", bssid, essid, passwd)
+        printb(a + "*** gift.txt found, attempting conection ***".c("purple"))
+        if try_connection == 1 then 
+            printb(a + ("** connected to '" + essid + "@" + passwd + "' **").c("purple"))
+            return true
+        end if
+        if tp(try_connection) == "string" then printb("* * " + try_connection.lower + " * *".c("black black purple"))
+        if tp(try_connection) == "null" then printb("* * failed to connect to '" + essid + "@" + passwd + "' * *".c("black black purple"))
+    end if 
+    if not try_connection then 
+        printb(a + "* * gift.txt not found, proceeding with exploits... * *".c("black black purple"))
+        wait(2)
+    end if
+    bssid_array=[];essid_array=[];pl=[]
     for i in get_shell.host_computer.wifi_networks("wlan0")
-    i=i.split(" ")
-    bl.push(i[0]);el.push(i[2]);pl.push(i[1][:-1].to_int)
+        i=i.split(" ")
+        bssid_array.push(i[0]);essid_array.push(i[2]);power_array.push(i[1][:-1].to_int)
     end for
 
-    sorted=[];for i in pl;sorted.push(i);end for;sorted.sort
-    ind=pl.indexOf(sorted[-1])
-    bssid=bl[ind];essid=el[ind];pwr=(300000/pl.sort[-1])
+    index=power_array.indexOf(power_array.sort[-1])
+    bssid=bssid_array[index];essid=essid_array[index];power=(300000/power_array.sort[-1])
     file_capture=objects.nf(get_shell.host_computer.File("/"), 0, "file.cap")
 
-    if tp(file_capture) != "file" or tp(file_capture) == "file" and tp(co.aircrack(file_capture.path)) == "null" then
+    if tp(file_capture) != "file" or tp(file_capture) == "file" and tp(crypto.aircrack(file_capture.path)) == "null" then
+        printb("* * failed to connect to optimal network***".c("black black purple"))
+        printb("* * use the [blbx] linux commands to connect manually * *".c("black black purple"))
+        printb("*** see [help] ***".c("black black purple"))
+        return false 
+    end if 
 
     add_line
-    print notify(" hacking '"+essid+"'. target ack count is "+str(round(pwr))+". ", "!")+c0
+    printb(("*** hacking target '" + essid + "'. ACK packet goal is (" + str(round(power)) + ") ***").c("black black purple"))
+    printb("*** please wait ***".c("black"))
     add_line
 
-    try2=co.aireplay(bssid, essid, pwr)
-    if tp(try2) == "string" then ;print notify(" "+try+" ", "?")+c0;return false;end if
+    try_aireplay = crypto.aireplay(bssid, essid, power)
+    if tp(try_aireplay) == "string" then 
+        printb("* * " + try_aireplay + " * *".c("black"))
+        printb("* * use the [blbx] linux commands to connect manually * *".c("black black purple"))
+        printb("*** see [help] ***".c("black black purple"))
+        return false
     end if
 
-    passwd=co.aircrack(objects.nf(get_shell.host_computer.File("/"), 0, "file.cap").path)
-    try=get_shell.host_computer.connect_wifi("wlan0", bssid, essid, passwd)
-    if tp(try) == "string" then ;print notify((" "+try.lower+" ").color("black black white"), "?")+c0;end if
-    if tp(try) == "null" then ;print notify((" failed to connect to '"+essid+"' ").color("black black white"), "?")+c0;end if
-    if try == 1 then print notify(" connected to '"+essid+"'. ", "!")+c0
-    wait(3);cs
+    file_cap = Directory.find_file(get_shell.host_computer.File("/"), 0, "file.cap").path
+    if not file_cap then 
+        printb("* * failed to create file.cap... * *".c("black black purple"))
+        printb("* * use the [blbx] linux commands to connect manually * *".c("black black purple"))
+        printb("*** see [help] ***".c("black black purple"))
+        return false 
+    end if 
+    printb("*** attempting file.cap aircrack ***".c("black black purple"))
+    passwd = crypto.aircrack()
+    try_aircrack = get_shell.host_computer.connect_wifi("wlan0", bssid, essid, passwd)
+    if tp(try_aircrack) == "string" then 
+        printb("* * " + try_aircrack.lower + " * *".c("black"))
+        printb("* * use the [blbx] linux commands to connect manually * *".c("black black purple"))
+        printb("*** see [help] ***".c("black black purple"))
+        return false 
+    end if
+    if tp(try_aircrack) == "null" then 
+        printb("* * failed to connect to '" + essid + "@" + passwd + "' * *".c("black"))
+        printb("* * use the [blbx] linux commands to connect manually * *".c("black black purple"))
+        printb("*** see [help] ***".c("black black purple"))
+        return false 
+    end if
+    if try_aircrack == 1 then printb("*** connected to '" + essid + "@" + passwd + "' ***".c("purple"))
+    wait(2)
     return true
 end function
 
 Params = {}
 Params.extract_type = function(PARAMS, token_type_arr)
     instances = []
-
+    _callback.local_debug(PARAMS, "<color=blue>PARAMS", 1363)
     for param_token in PARAMS
         for token_type in token_type_arr
             if param_token.type == token_type then 
@@ -1198,7 +1371,7 @@ Params.extract_type = function(PARAMS, token_type_arr)
             end if
         end for 
     end for 
-
+    _callback.local_debug(instances, "<color=red>extract_types, internal", 1372)
     return instances
 end function
 
@@ -1214,7 +1387,49 @@ end function
 
 Params.extract_flag_content = function(flag)
     return flag.split("\[|\]|\,|\s").clean([""])
+end function
+
+Params.translate_input_brackets = function(input_string)
+    toggle_bracket = false 
+    result = ""
+    for ch in input_string 
+        if ch == "#" and not toggle_bracket then 
+            result = result + "["
+            toggle_bracket = true
+            continue 
+        end if  
+        if ch == "#" and toggle_bracket then 
+            result = result + "]"
+            toggle_bracket = false
+            continue 
+        end if 
+        result = result + ch 
+    end for 
+
+    return result 
+end function
+
+Dictionary = {}
+Dictionary.lookup_table = []
+
+Dictionary.set_lookup_table = function(new_lookup_table)
+    self.lookup_table = new_lookup_table
+    return self.lookup_table
+end function
+
+Dictionary.parse_lookup_table = function()
+    if not self.lookup_table.len then 
+        clear_screen
+        printb(a + "*** parsing dictionary attack lookup table ***".c("purple"))
+        prompt_proceed = ui(a + b + "* * proceed? Y/n * *".c("black black purple") + "\n\n\n" + Prompt.get_message())
+        if prompt_proceed.search("y") then self.set_lookup_table(Session.db.speed_parse("dictionary"))
+    end if 
 end function 
+
+Dictionary.get_lookup_table = function()
+    self.parse_lookup_table()
+    return self.lookup_table
+end function
 
 Dia = {}
 Dia.bridge = {}

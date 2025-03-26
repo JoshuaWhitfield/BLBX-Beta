@@ -4,9 +4,9 @@ Parser.ast_output = []
 Parser.current = 0
 
 Parser.wipe = function()
+    self.ast_output = []
     self.tokens = []
     self.current = 0
-    self.ast_output = []
 end function
 
 
@@ -64,10 +64,8 @@ end function
 Parser.ParseCLI = function(input)
     Lexer.set_input(input)
     tokens = Lexer.Tokenize()
-    _callback.debug(tokens, "parser", 67)
     Parser.set_tokens(tokens)
     Parser.ParseCommand()
-    print "parser 70: "+ Parser.get_ast_output()
     return Parser.get_ast_output()
 end function 
 

@@ -24,7 +24,7 @@ eb=e("b");eu=e("u");est=e("st");es=e("s");ea=e("a");ec=e("c")
 
 s=function(int)
   if tp(int) != "number" then int=15
-  return "<size="+int+">"
+  return "<size="+str(int)+">"
 end function
 
 st=function();return "<s>";end function

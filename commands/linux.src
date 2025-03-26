@@ -31,6 +31,7 @@ command.ls = function(PARAMS)
         if tp([TokenTypes.String, TokenTypes.Argument].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][ls][err]: second argument must be a string or argument...")   
     
         valid_file = Directory.validate_file(store.root_file, "ls", PARAMS, 1)
+        if not tp(valid_file.data) == "file" then return _callback.catch(valid_file.data)
         return valid_file
     end function
     error_handling = init()
@@ -95,6 +96,7 @@ command.cd = function(PARAMS)
         end if 
         
         valid_file = Directory.validate_file(store.root_file, "cd", PARAMS, 1)
+        if not tp(valid_file.data) == "file" then return _callback.catch(valid_file.data)
         return valid_file
     end function
     print 
@@ -121,7 +123,7 @@ command.cat = function(PARAMS)
         if tp([TokenTypes.String, TokenTypes.Argument].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][cd][err]: second argument must be a string or argument...")   
 
         valid_file = Directory.validate_file(store.root_file, "cat", PARAMS)
-        if not valid_file.status then return valid_file
+        if not tp(valid_file.data) == "file" then return _callback.catch(valid_file.data)
 
         if not valid_file.data.has_permission("r") then return _callback.catch("[blbx][cat][err]: read file permissions denied...")
         if valid_file.data.is_binary then return _callback.catch("[blbx][cat][err]: file '" + valid_file.data.path + "' must not be a binary...")
@@ -158,6 +160,7 @@ command.rm = function(PARAMS)
         if tp([TokenTypes.String, TokenTypes.Argument].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][ls][err]: second argument must be a string or argument...")   
     
         valid_file = Directory.validate_file(store.root_file, "rm", PARAMS)
+        if not tp(valid_file.data) == "file" then return _callback.catch(valid_file.data)
         return valid_file
     end function
     error_handling = init()
@@ -184,6 +187,8 @@ command.find = function(PARAMS)
         if tp([TokenTypes.String, TokenTypes.Argument].indexOf(param_token.type)) != "number" then return _callback.catch("[blbx][find][err]: second argument must be a string or argument...")   
 
         valid_file = Directory.validate_file(store.root_file, "find", PARAMS, 0, 1)
+        if not tp(valid_file.data) == "file" then return valid_file
+        _callback.debug("<color=yellow>"+ valid_file, "linux", 191)
         return valid_file
     end function
     error_handling = init()

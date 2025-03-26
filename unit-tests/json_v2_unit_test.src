@@ -4,14 +4,14 @@ import_code("/root/blackbox/callback")
 import_code("/root/blackbox/internal")
 import_code("/root/blackbox/markup")
 
-nested_maps = {"map1": {"map2": {"map3": {"map4": {}}}}}
-nested_arrays = {"list1": [1, [2, [3, [4, "final", null]]]]}
+nested_maps = {"map1": {"map2": {"map3": {"map4": {}, "list": []}}}}
+nested_arrays = {"list1": [1, [2, [], [3, [4, "final", [], null]]]]}
 
 dynamic_arrays = {"list1": [1, [2, [3, {"map1": {"list2": [{"sub": "map", "null_value": null}]}}]]]}
-shallow_maps = Session.db.parse("exploit")
+//shallow_maps = Session.db.parse("exploit")
 shallows_arrays = {}
 
-attempts = [["nested maps", nested_maps, nested_maps.len], ["nested arrays", nested_arrays, nested_arrays.len], ["dynamic arrays", dynamic_arrays, dynamic_arrays.len], ["shallow maps", shallow_maps, shallow_maps.len]]
+attempts = [["nested maps", nested_maps, nested_maps.len], ["nested arrays", nested_arrays, nested_arrays.len], ["dynamic arrays", dynamic_arrays, dynamic_arrays.len]]//, ["shallow maps", shallow_maps, shallow_maps.len]
 _callback.toggle_debug() // on
 for attempt in attempts 
     attempt_name = attempt[0]
@@ -27,6 +27,7 @@ for attempt in attempts
     parsed_object = JSON.read(stringified_object)
     add_line
     printb("PARSED OBJECT: ".c("black"))
-    _callback.debug(parsed_object, "parsed object", parsed_object.len)
+    _callback.debug(parsed_object, "parsed object", 30)
+	print parsed_object
 end for 
 _callback.toggle_debug() // off

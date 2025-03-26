@@ -49,7 +49,10 @@ command.sweep = function(PARAMS)
         if not found.len == config.ports.len then continue 
         
         matching_ip_address_arr.push(config.rhost)
-        Interpreter.handle_piping(("nmap " + config.rhost), 1)
+
+        //_callback.local_debug(config.rhost, "config.rhost", 10)
+    
+        Session.process.internal_run("nmap", config.rhost, 0)
         count = count + 1
     end while 
 
@@ -108,11 +111,12 @@ command.attack = function(PARAMS, data = 0) //attack ip_address port_number -sca
         return fif((config.change_password), 1, fif((config.fire_wall), 1, 0))
     end function
 
+    Session.process.internal_run("nmap", config.rhost)
+
     if config.attack_router then 
         Session.machine.ip.add_pub_address(config.rhost)
         config.lan_address = get_router(config.rhost).local_ip
-        
-        Interpreter.handle_piping(("nmap " + config.rhost), 1)
+        Session.process.internal_run("nmap", config.rhost)
         success = false
         attack_result = Exploit.attack(config.lan_address, handle_bool_flags(), config.third_arg)
         if not attack_result.status then 
@@ -124,7 +128,9 @@ command.attack = function(PARAMS, data = 0) //attack ip_address port_number -sca
 
         success = true 
         
-        if success then Interpreter.handle_piping("show", 0)
+        if success then 
+            Session.process.internal_run("show")
+        end if 
 
         return _callback.catch("", 1)
     end if 
@@ -159,8 +165,10 @@ command.attack = function(PARAMS, data = 0) //attack ip_address port_number -sca
         success = true
     end for 
 
-    if success then Interpreter.handle_piping("show", 0)
-
+    if success then 
+        Session.process.internal_run("show")
+    end if 
+    
     return _callback.catch("", 1)
 end function 
 command["atk"] = @command.attack
@@ -269,7 +277,8 @@ command.wipe = function(PARAMS)
 
     Session.wipe()
     Exploit.device.wipe()
-    Interpreter.handle_piping("disconnect", 0)
+
+    Session.process.internal_run("disconnect")
 
     return _callback.catch("", 1)
 end function 
@@ -277,7 +286,7 @@ end function
 command.rat = function(PARAMS)
     config = {"scan_nw": 0, "rshell": 0, "dict": 0, "bounce": 0, "escalate": 0}
     bounce = {"library_name": "aptclient.so", "lan_address": 0}
-    escalate = {"username": "root", "password": false, "use_dict": 0, "dictionary": Session.db.parse("dictionary")}
+    escalate = {"username": "root", "password": false, "use_dict": 0}
     init = function()
         if not Session.process.is_connected() then return _callback.catch("[blbx][rat][err]: must [connect] to a target to use [rat] exploit...")
         
@@ -298,28 +307,24 @@ command.rat = function(PARAMS)
             if tp(["dict", "d"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.dict = 1
             flag_token = flag_token.value
             if flag_token.is_match("\[") and flag_token.is_match("\]") then 
-                flag_token = flag_token.split(", ")
-                if not flag_token.len > 1 then
-                    Usage.display("rat", Usage.get_usage_object("rat"))
-                    return _callback.catch("", 0)
-                end if
-                flag_token = flag_token.join(",")
-                if tp(["escalate", "esc"].indexOf(slice(flag_token.values.clean("-"), 0, flag_token.values.clean("-").indexOf("[")).join(""))) == "number" then 
-                    if flag_token.is_match("\[") and flag_token.is_match("]") then 
-                        if not flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:].len > 1 then 
-                            Usage.display("rat", Usage.get_usage_object("rat"))
-                            return _callback.catch("", 0)
-                        end if 
-
-                        config.escalate = 1
-                        captured_flag = flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:]
-                        if captured_flag.hasIndex(0) then escalate.username = captured_flag[0]
-                        if captured_flag.hasIndex(1) then escalate.password = captured_flag[1]
-                        if not escalate.password then escalate.use_dict = 1
-
-                        escalate.username = captured_flag[0]
-                        escalate.password = captured_flag[1]
+                flag_slice = (slice(flag_token.values.clean("-").join(""), 0, flag_token.indexOf("[")))[:-1]
+                _callback.local_debug(flag_slice)
+                if tp(["escalate", "esca", "esc", "e"].indexOf(flag_slice)) == "number" then 
+                    _callback.local_debug(flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]"), "flag dynamic 3", 318)
+                    if not flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:].len > 1 then 
+                        Usage.display("rat", Usage.get_usage_object("rat"))
+                        return _callback.catch("", 0)
                     end if 
+
+                    config.escalate = 1
+                    captured_flag = flag_token.values.clean(["-"]).join("").lower.split("\[|\,|\s|\]")[1:]
+                    if captured_flag.hasIndex(0) then escalate.username = captured_flag[0]
+                    if captured_flag.hasIndex(1) then escalate.password = captured_flag[1]
+                    if not escalate.password then 
+                        escalate.use_dict = 1
+                        Dictionary.parse_lookup_table()
+                        escalate.dictionary = Dictionary.get_lookup_table()
+                    end if
                 end if 
                 if tp(["bounce", "b"].indexOf(slice(flag_token.values.clean("-"), 0, flag_token.values.clean("-").indexOf("[")).join(""))) == "number" then 
                     if flag_token.is_match("\[") and flag_token.is_match("\]") then
@@ -349,6 +354,7 @@ command.rat = function(PARAMS)
             end if
         end for 
 
+        if not (config.scan_nw + config.rshell + config.dict + config.bounce + config.escalate) then return _callback.catch("", 0)
         return _callback.catch("", 1)
     end function 
     error_handling = init()
@@ -358,6 +364,7 @@ command.rat = function(PARAMS)
     handle["scan_nw"] = function()
         init = function()
             shell_instance = fif(Session.process.is_connected(), Session.borrow("shell", Session.machine.ip.get_lan()), get_shell)
+            if not tp(shell_instance) == "shell" then return _callback.catch("[blbx][rat][err]: shell objects from remote target not stored...")
             try_send_data = Exploit.module.malware.send(shell_instance, "blbx_scan_nw.src", "", Session.rpc.src.scan_nw(), {"_callback": _callback})
             return try_send_data
         end function 
@@ -371,7 +378,9 @@ command.rat = function(PARAMS)
 
     handle["rshell"] = function()
         init = function()
+            _callback.local_debug(Session.object.shell.list, "shell list", 380)
             shell_instance = fif(Session.process.is_connected(), Session.borrow("shell", Session.machine.ip.get_lan()), get_shell)
+            if not tp(shell_instance) == "shell" then return _callback.catch("[blbx][rat][err]: shell objects from remote target not stored...")
             try_send_data = Exploit.module.malware.send(shell_instance, "blbx_rshell.src", "", Session.rpc.src.rshell(), {"_callback": _callback, "Directory": Directory, "host_ip_address": get_shell.host_computer.public_ip})
             return try_send_data
         end function 
@@ -438,7 +447,7 @@ command.rat = function(PARAMS)
                 try_send_local_library = get_shell.scp(local_library_file.path, access_dir.path, shell_instance)
                 if tp(try_send_local_library) == "string" then return _callback.catch(("[blbx][rat][err]: " + try_send_metax))
             end if 
-            incoming_data = {"_callback": _callback, "Directory": Directory, "Exploit": Exploit, "string": string, "Session": Session, "library_path": Directory.find_file(file_instance, 0, bounce.library_name).path, "lan_address": bounce.lan_address, "database": Session.db.parse("exploit"), "notify": @notify, "hide_ip": @hide_ip}
+            incoming_data = {"_callback": _callback, "Directory": Directory, "Exploit": Exploit, "string": string, "Session": Session, "library_path": Directory.find_file(file_instance, 0, bounce.library_name).path, "lan_address": bounce.lan_address, "database": Session.db.parse("exploit"), "notify": @notify, "hide_ip": @hide_ip, "JSON": JSON}
             
             try_send_data = Exploit.module.malware.send(shell_instance, "blbx_bounce.src", "", Session.rpc.src.bounce(), incoming_data)
             return try_send_data
@@ -448,10 +457,11 @@ command.rat = function(PARAMS)
 
         Session.machine.ip.add_lan_address(bounce.lan_address)
 
-        data_catch = Exploit.module.malware.catch().data.data
+        data_catch = Exploit.module.malware.catch().data
 
-        if not data_catch.hasIndex("Session") then return _callback.catch(data_catch.data)
+        if not data_catch.hasIndex("Session") then return _callback.catch(data_catch)
 
+        print data_catch
         Session = @data_catch.Session 
         Exploit = @data_catch.Exploit
         exploit_arr = @data_catch.exploit_arr
@@ -466,15 +476,34 @@ command.rat = function(PARAMS)
             if tp(try_remote_library(bounce)) == "file" then try_remote_library(bounce).delete
         end if 
 
-        Interpreter.handle_piping("show", 0)
+        Session.process.internal_run("show")
 
         return _callback.catch(exploit_arr, 1)
     end function
 
     handle["escalate"] = function()
-        init = function()
-            
+        init = function(escalate)
+            shell_instance = fif(Session.process.is_connected(), Session.borrow("shell", Session.machine.ip.get_lan()), get_shell)
+            if not tp(shell_instance) == "shell" then return _callback.catch("[blbx][rat][err]: shell objects from remote target not stored...")
+            try_send_data = Exploit.module.malware.send(shell_instance, "blbx_escalate.src", "", Session.rpc.src.escalate(), escalate + {"_callback": _callback})
+            return try_send_data
         end function 
+        error_handling = init(escalate)
+        if not error_handling.status then return error_handling
+
+        data_catch = Exploit.module.malware.catch()
+        print "hacking 494: "+ data_catch.values
+        if not data_catch.hasIndex("status") then data_catch = data_catch.values[-1]
+        if not data_catch.status then return data_catch
+        data_catch = data_catch.data 
+        if data_catch.hasIndex("__isa") then data_catch = data_catch.__isa //goddamn __isa
+        
+        lan_address = data_catch.host_computer.local_ip
+        Exploit.module.allocate(data_catch, lan_address)
+    
+        Exploit.device.add(data_catch, lan_address)
+        Exploit.device.add_user(lan_address, Session.get_user(data_catch))
+        return _callback.catch(data_catch, 1)
     end function 
 
     return_data = []
@@ -493,7 +522,122 @@ command.rat = function(PARAMS)
     return _callback.catch("", 1)
 end function  
 
+command.creds = function(PARAMS)
+    config = {"passwd": 0, "bank": 0, "mail": 0}
+    init = function()
+        if not PARAMS.len then
+            Usage.display("creds", Usage.get_usage_object("creds"))
+            return _callback.catch("", 0)
+        end if 
 
+        flag_tokens = Params.extract_type(PARAMS, [TokenTypes.Flag])
+        if not flag_tokens then 
+            Usage.display("rat", Usage.get_usage_object("rat"))
+            return _callback.catch("", 0)
+        end if 
+        
+        for flag_token in flag_tokens 
+            if tp(["passwd", "pass", "p"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.passwd = 1
+            if tp(["bank", "b"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.bank = 1
+            if tp(["mail", "m"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.mail = 1
+        end for 
+
+        if not (config.passwd + config.bank + config.mail) then return _callback.catch("", 0)
+        return _callback.catch("", 1)
+    end function
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    if config.passwd then 
+
+        return _callback.catch()
+    end if 
+
+    return _callback.catch("", 1)
+end function
+
+command.decipher = function(PARAMS) 
+    config = {"scan": 0, "crypto": 0, "hash": 0}
+    init = function()
+        if not PARAMS.len then 
+            Usage.display("decipher", Usage.get_usage_object("decipher"))
+            return _callback.catch("", 0)
+        end if 
+
+        hash_token = Params.extract_type(PARAMS, [TokenTypes.String])
+        if not hash_token then return _callback.catch("[blbx][decipher][err]: must include a hash in string form.", 0)
+
+        hash_token_value = hash_token[0].value 
+        hash_len_constant = 32
+        if hash_token_value.split(":").len > 1 then hash_token_value = hash_token_value.split(":")[-1]
+        if hash_token_value.len != hash_len_constant then return _callback.catch("[blbx][decipher][err]: invalid hash format. must be 16 bytes...", 0)
+        config.hash = hash_token_value 
+
+        flag_tokens = Params.extract_type(PARAMS, [TokenTypes.Flag])
+
+        _callback.local_debug(config.hash, "debug hash", 578)
+
+        if flag_tokens then 
+            for flag_token in flag_tokens 
+                if tp(["scan", "s"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.scan = 1
+            end for
+        end if 
+
+        config.crypto = Exploit.module.get_local_lib("crypto.so")
+        if not config.crypto then 
+            printb(a + ("* * missing crypto library on local machine * *").c("black"))
+            return _callback.catch("", 0)
+        end if 
+        return _callback.catch("", 1)
+    end function 
+    error_handling = init()
+    if not error_handling.status then return error_handling
+    
+    if config.scan then 
+        deciphered_hash = config.crypto.decipher(config.hash)
+        printb("  password found: ".c("black black purple") + deciphered_hash.c("purple"))
+        return _callback.catch(deciphered_hash, 1)
+    end if 
+
+    hash_table = Dictionary.get_lookup_table()
+    if not hash_table.hasIndex(config.hash) then
+        add_line 
+        add_line
+        printb(a + ("* * password not found in hash table * *").c("black"))
+        printb(a + ("** try running ' decipher " + config.hash + " -scan ' instead **").c("purple"))
+        return _callback.catch("", 0)
+    end if 
+
+    printb("  password found: ".c("black black purple") + hash_table[config.hash].c("purple"))
+
+    return _callback.catch(hash_table[config.hash], 1)
+end function 
+command.dec = @command.decipher
+
+command.load = function(PARAMS)
+    config = {"dictionary": 0, "exploit": 0, "botnet": 0}
+    init = function()
+        flag_tokens = Params.extract_type(PARAMS, [TokenTypes.Flag])
+        if not flag_tokens then 
+            Usage.display("load", Usage.get_usage_object("load"))
+            return _callback.catch("", 0)
+        end if 
+        
+        for flag_token in flag_tokens 
+            if tp(["dictionary", "dict", "d"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.dictionary = 1
+            if tp(["exploit", "expl", "e"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.exploit = 1
+            if tp(["botnet", "bot", "b"].indexOf(flag_token.value.values.clean(["-"]).join(""))) == "number" then config.botnet = 1
+        end for
+
+        return _callback.catch("", 1) 
+    end function
+    error_handling = init()
+    if not error_handling.status then return error_handling
+
+    
+
+    return _callback.catch("", 1)
+end function
 
 command.rshells = function(PARAMS)
     init = function()
@@ -574,8 +718,6 @@ command.logs = function(PARAMS)
     
     return _callback.catch("", 1)
 end function 
-
-
 
 command.dia = function(PARAMS)
     config = {"ssh_ip": 0, "ssh_passwd": 0, "rhost": 0, "flag": 0, "target_amount": 1}

@@ -1,26 +1,109 @@
-incoming_data = get_custom_object().data 
+c10 = char(10)
+c0 = char(0)
+tp = @typeof
+incoming_object = get_custom_object()
+incoming_data = incoming_object.data 
+string.color=function(string_split_by_space="black black black");list=string_split_by_space.split(" ")
+  if not string_split_by_space.len then string_split_by_space="black black black"
+  colorm={"black":"<#707070>", "white":"<#BEB9E7FF>", "purple":"<#7A53F6>", "pink":"<#ED2EEA>", "red":"<color=red>", "dark_red":"<#731313>", "blue":"<color=blue>", "green":"<#2BB930>", "dark_green":"<#2C6407>", "cyan":"<#32E3EF>", "yellow":"<#D2DE0F>", "brown":"<#674D06>", "orange":"<#EA9512>"}
+  alpha="qwertyuiopasdfghjklzxcvbnm";number="1234567890";symbol="!@#$%^&*()_+-={}|[]\:;'<>?,./"+""""
+  check_all=function();res=1;for i in list;if not colorm.hasIndex(i) then ;res=0;break;end if;end for;return res;end function
+  if not check_all() then return false
+  while list.len < 3;list.push(list[-1]);end while
+  coa=colorm[list[0]];con=colorm[list[1]];cos=colorm[list[2]];curr_color=coa;curr_type="alpha";newl=[];fp=1//;count=-1
+  for char in self.values
+    is_a=(tp(alpha.indexOf(char.lower)) == "number");is_n=(tp(number.indexOf(char)) == "number");is_s=(tp(symbol.indexOf(char)) == "number")
+    if char==c10 then ;newl.push(char+curr_color);continue;end if
+    if is_a then curr_type="alpha";if is_n then curr_type="number";if is_s then curr_type="symbol"
+    if curr_type=="alpha" then
+      if curr_color!=coa or (curr_color==coa and fp) then curr_color=coa else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=coa;continue
+    end if
+    if curr_type=="number" then
+      if curr_color!=con or (curr_color==con and fp) then curr_color=con else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=con;continue
+    end if
+    if curr_type=="symbol" then
+      if curr_color!=cos or (curr_color==cos and fp) then curr_color=cos else curr_color="";fp=0
+      newl.push(curr_color+char);curr_color=cos;continue
+    end if
+    newl.push(char)
+  end for
+  
+  self=newl.join("");ctr=0
+  for i in self
+    if i == "<" then ctr=ctr+1
+  end for
+  for i in range(1,ctr)
+    self=self+"</color>"
+  end for
+  return self
+end function
+string.c = @string.color
+
+list.clean=function(example_list)
+  newl=[]
+  if not tp(example_list) == "list" then example_list = [example_list]
+  for i in self
+    if tp(example_list.indexOf(i)) == "number" then continue
+    newl.push(i)
+  end for
+  self=newl
+  return self
+end function
+
+incoming_object = get_custom_object()
+incoming_data = incoming_object.data 
 _callback = @incoming_data._callback
 username = incoming_data.username
 password = incoming_data.password
 dictionary = incoming_data.dictionary 
-
+b = "<b>"
+a = "<align=center>"
 escalate = function(_user, _dict, _pass = 0)
+    print b + ("*** attempting dictionary attack ***").c("black black purple") + c0
+    print b + ("*** please wait ***").c("black") + c0
+    wait(2)
+
     if _pass then 
         try_shell_login = get_shell(_user, _pass)
-        if typeof(try_shell_login) == "null" then return _callback.catch("[blbx][esca][err]: shell instance login attempt failed...")
+        if typeof(try_shell_login) != "shell" then return _callback.catch("[blbx][esca][err]: shell instance login attempt failed...")
         
         return _callback.catch(try_shell_login, 1)
     end if 
 
     found = false 
-    for password in _dict.values 
+    count = 0
+    limit_check = 0
+    LIMIT = 200
+    progress_bar_history = []
+    for password in _dict
+        limit_check = limit_check + 1
+        password = password.values.clean([""""]).join("")
+        print "<color=red>"+ password
         try_shell_login = get_shell(_user, password)
+        if limit_check == LIMIT then 
+          limit_check = 0
+          count = count + 1
+          progress_bar = (a + _callback.loading_key_frame(((count * 200) / _dict.values.len))) // 341,000 passwords in total
+          if tp(progress_bar_history.indexOf(progress_bar)) != "number" then 
+            clear_screen
+            progress_bar_history.push(progress_bar)
+            print(b + progress_bar)
+          end if 
+        end if 
         if typeof(try_shell_login) == "null" then continue 
+        print 
+        print(b + a + ("*** password found for user '" + _user + "'@'" + password + "' ***").c("black black purple") + c0)
+        print          
         found = try_shell_login
         break
     end for 
-    if not found then return _callback.catch("[blbx][esca][err]: dictionary attack failed. password not found...", 0)  
+    if not found then return _callback.catch("[blbx][esca][err]: dictionary attack failed. password not found...")  
     return _callback.catch(found, 1)
-end function 
+end function
 
-return escalate(username, dictionary, password)
+escalation_result = escalate(username, dictionary, password)
+
+incoming_object.data = escalation_result
+return incoming_object

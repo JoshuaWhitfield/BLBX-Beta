@@ -97,7 +97,7 @@ Lexer.next_token = function()
     end if
 
     //Handle commands
-    if ch.is_match("[a-zA-z_]") or ch.is_match("\/") then 
+    if ch.is_match("[a-zA-z_]") or ch.is_match("\/") or self.get_input()[self.position].is_match("\.") then 
 
         keyword = ch
         

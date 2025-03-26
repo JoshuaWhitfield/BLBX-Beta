@@ -76,6 +76,7 @@ lan_address = @incoming_data.lan_address
 notify = @incoming_data.notify
 hide_ip = @incoming_data.hide_ip
 tp = @typeof
+JSON = @incoming_data.JSON
 
 memory_arr = []
 metaxploit = Exploit.module.get_local_lib("metaxploit.so")//

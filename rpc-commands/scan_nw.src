@@ -1,3 +1,6 @@
+c10 = char(10)
+c0 = char(0)
+tp = @typeof
 string.color=function(string_split_by_space="black black black");list=string_split_by_space.split(" ")
   if not string_split_by_space.len then string_split_by_space="black black black"
   colorm={"black":"<#707070>", "white":"<#BEB9E7FF>", "purple":"<#7A53F6>", "pink":"<#ED2EEA>", "red":"<color=red>", "dark_red":"<#731313>", "blue":"<color=blue>", "green":"<#2BB930>", "dark_green":"<#2C6407>", "cyan":"<#32E3EF>", "yellow":"<#D2DE0F>", "brown":"<#674D06>", "orange":"<#EA9512>"}
@@ -32,7 +35,7 @@ string.color=function(string_split_by_space="black black black");list=string_spl
   for i in range(1,ctr)
     self=self+"</color>"
   end for
-  return self
+  return self[:-8]
 end function
 string.c = @string.color
 string.search = function(sub_string = "")
@@ -57,13 +60,13 @@ scan_network = function()
     end for 
     
     print 
-    print "<b>" + "network devices: " + "</b>"
+    print "<b>" + "network devices: ".c("black") + "</b>"
     print 
-    print "<b>" + lan_address_arr[:-count].join(char(10) + "<b>")
+    print "<b>" + lan_address_arr[:(-count)][0].c("black black purple") + lan_address_arr[:-count].join(char(10) + "<b>".c("black black purple"))
     print 
-    print "<b>" + "nearby routers: " + "</b>"
+    print "<b>" + "nearby routers: ".c("black") + "</b>"
     print 
-    print "<b>" + router_addresses.join(char(10) + "<b>")
+    print "<b>" + router_addresses[0].c("black black purple") + char(10) + router_addresses[1:].join(char(10) + "<b>".c("black black purple"))
     print
 
     return _callback.catch({"network_devices": lan_address_arr[:-count], "routers": router_addresses}, 1)
