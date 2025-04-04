@@ -92,18 +92,6 @@ PasswordGenerator.AllPasswords=function()
     if str_len.len > 3 and str_len[-3:].search("000") then 
       final[md5(seed)] = seed
       final[md5(seed.lower)] = seed.lower
-      limit_check = limit_check + 1
-      if limit_check == LIMIT then 
-        limit_check = 0
-        count = count + 1
-        progress = ((count * LIMIT) / PASSWD_TOTAL)
-        progress_bar = (a + _callback.loading_key_frame(progress))
-        if tp(progress_bar_history.indexOf(progress_bar)) == "number" then 
-          clear_screen 
-          printb(progress)
-          progress_bar_history.push(progress)
-        end if 
-      end if 
       continue
     end if
   end for

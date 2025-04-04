@@ -689,6 +689,7 @@ command.start = function(PARAMS)
 end function 
 
 command.logs = function(PARAMS)
+    config = {"bank": 0}
     init = function()
         flag_token_arr = Params.extract_flags(PARAMS)
         if flag_token_arr.len then 
@@ -698,6 +699,7 @@ command.logs = function(PARAMS)
                     Usage.display("logs", Usage.get_usage_object("logs"))
                     return _callback.catch("", 0) 
                 end if 
+                if tp(["bank", "b"].indexOf(flag_token.value.values.clean("-").join(""))) == "number" then config.bank = 1
             end for   
         end if 
 
@@ -711,7 +713,7 @@ command.logs = function(PARAMS)
     try_clear_logs = Exploit.module.clear_logs()
     if not try_clear_logs then return _callback.catch("[blbx][logs][err]: logs file '/var/system.log' not found...")
     if tp(try_clear_logs) == "string" and not try_clear_logs.search("corrupted") then return _callback.catch("[blbx][logs][notif]: "+ try_clear_logs)
-    
+
     add_line
     printb(try_clear_logs.c("black"))
     add_line 

@@ -478,7 +478,7 @@ Session.db.init = function(table_name_arr)
             printb(a + "please wait".color("black"))
             
             extra_hashes = {md5("Usand"): "Usand", md5("rixie"): "rixie"}
-            try_generate_passwords = PasswordGenerator.AllPasswords() + etra_hashes // {md5(passwd): passwd}
+            try_generate_passwords = PasswordGenerator.AllPasswords()
             for group in try_generate_passwords
                 self.add_to(try_generate_passwords, "dictionary")
             end for 
@@ -1000,6 +1000,10 @@ Exploit.module.clear_logs = function()
     
     return message 
 end function 
+
+Exploit.module.clear_bank_logs = function()
+
+end function
 
 Exploit.module.library = {}
 
